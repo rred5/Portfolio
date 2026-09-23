@@ -41,12 +41,12 @@ const ICE = ['#7fd3f7', '#a8e4fa', '#6ac4ef', '#94dcf8'];
 const style: HoldStyle = {
   interactive: (r) =>
     merge([
-      sculptHold(r, { kind: pickKind(r, { blob: 1, sloper: 1 }), size: 0.26, color: '#c8f2ff', top: '#ffffff', topAmount: 0.45, rough: 0.2 }),
+      sculptHold(r, { kind: pickKind(r, { blob: 1, mushroom: 1, sloper: 1 }), size: 0.26, color: '#c8f2ff', top: '#ffffff', topAmount: 0.45, rough: 0.2 }),
       // Chipped mark where the pick lands.
       place(paint(flat(new TetrahedronGeometry(0.035)), '#5aa8e0'), [0, 0.02, 0.07], [0.6, 0.3, 0]),
     ]),
-  support: (r) => sculptHold(r, { kind: 'blob', size: range(r, 0.15, 0.2), color: '#b4ebfd', top: '#ffffff', topAmount: 0.4, rough: 0.2 }),
-  decor: (r) => sculptHold(r, { kind: pickKind(r, { blob: 2, sloper: 1 }), size: range(r, 0.12, 0.26), color: pick(r, ICE), top: '#ffffff', topAmount: 0.3, rough: 0.22 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { blob: 1, mushroom: 1 }), size: range(r, 0.15, 0.2), color: '#b4ebfd', top: '#ffffff', topAmount: 0.4, rough: 0.2 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { blob: 2, mushroom: 1, sloper: 1 }), size: range(r, 0.12, 0.26), color: pick(r, ICE), top: '#ffffff', topAmount: 0.3, rough: 0.22 }),
   decorCount: 12,
   decorArea: { u0: -2.8, u1: 2.8, v0: 0.5, v1: 4.9 },
 };

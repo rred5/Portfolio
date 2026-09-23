@@ -30,17 +30,17 @@ import { Holds, type HoldStyle } from '../wall/Holds';
 import type { Spot } from '../wall/route';
 import { toWorld } from '../wall/types';
 
-const HOLD_COLORS = ['#e8e2d4', '#c9c3b6', '#6a6a74', '#a3a3ad', '#d8c6a8'];
+const HOLD_COLORS = ['#e8e2d4', '#c9c3b6', '#9696a3', '#b3b3bd', '#d8c6a8'];
 const LED = { start: '#35d05a', hand: '#29c6f0', finish: '#ff3fa4' };
 
 /** Plastic hold: smooth, with a light dusting of chalk on top. */
 function kilterHold(r: Rng, size: number, color: string): BufferGeometry {
-  const kind = pickKind(r, { jug: 2, crimp: 2, pinch: 1, sloper: 1 });
+  const kind = pickKind(r, { jug: 2, crimp: 2, pinch: 1, sloper: 1, pocket: 1, horn: 0.7, rail: 0.3, dual: 0.8 });
   return sculptHold(r, { kind, size, color, top: '#ffffff', topAmount: 0.2, rough: 0.08, vary: 0.04 });
 }
 
 const kilterStyle: HoldStyle = {
-  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, crimp: 1 }), size: 0.2, color: '#f2eee4', top: '#ffffff', topAmount: 0.3, rough: 0.08 }),
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, pinch: 1, horn: 1, pocket: 1, dual: 1 }), size: 0.21, color: '#f2eee4', top: '#ffffff', topAmount: 0.3, rough: 0.08 }),
   support: (r) => kilterHold(r, range(r, 0.13, 0.16), pick(r, HOLD_COLORS)),
   decor: (r) => kilterHold(r, range(r, 0.08, 0.15), pick(r, HOLD_COLORS)),
   glow: (i, n) => (i === 0 ? LED.start : i === n - 1 ? LED.finish : LED.hand),

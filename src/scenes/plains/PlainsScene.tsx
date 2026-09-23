@@ -25,9 +25,9 @@ const CHALK = '#fffaf0';
 
 /** Sandstone features: rounded edges and jugs in the rock colour, chalked where hands go. */
 const style: HoldStyle = {
-  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, edge: 1 }), size: 0.22, color: '#f2bd82', top: CHALK, topAmount: 0.55, rough: 0.14 }),
-  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1, sloper: 1 }), size: range(r, 0.15, 0.19), color: '#e8a866', top: CHALK, topAmount: 0.4, rough: 0.14 }),
-  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 3, sloper: 2 }), size: range(r, 0.1, 0.2), color: pick(r, BANDS), top: CHALK, topAmount: 0.08, rough: 0.16 }),
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, pocket: 1, flake: 1 }), size: 0.22, color: '#f2bd82', top: CHALK, topAmount: 0.55, rough: 0.14 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1, pocket: 1, sloper: 1 }), size: range(r, 0.15, 0.19), color: '#e8a866', top: CHALK, topAmount: 0.4, rough: 0.14 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, pocket: 2, sloper: 1, flake: 1 }), size: range(r, 0.1, 0.2), color: pick(r, BANDS), top: CHALK, topAmount: 0.08, rough: 0.16 }),
   decorCount: 14,
   decorArea: { u0: -2.6, u1: 2.6, v0: 0.4, v1: 4.1 },
 };

@@ -39,9 +39,9 @@ const CHALK = '#fff6ea';
 
 /** Sea-cliff edges and flakes in the rock colour, chalked where hands go. */
 const style: HoldStyle = {
-  interactive: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1 }), size: 0.24, color: '#dfa47c', top: CHALK, topAmount: 0.55, rough: 0.14 }),
-  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, crimp: 1 }), size: range(r, 0.15, 0.19), color: '#cf916b', top: CHALK, topAmount: 0.4, rough: 0.14 }),
-  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 3, sloper: 1 }), size: range(r, 0.12, 0.22), color: pick(r, ROCK), top: CHALK, topAmount: 0.06, rough: 0.16 }),
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { edge: 1, jug: 1, knob: 1, flake: 1 }), size: 0.24, color: '#dfa47c', top: CHALK, topAmount: 0.55, rough: 0.14 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, crimp: 1, knob: 1 }), size: range(r, 0.15, 0.19), color: '#cf916b', top: CHALK, topAmount: 0.4, rough: 0.14 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, flake: 1, knob: 1, sloper: 1 }), size: range(r, 0.12, 0.22), color: pick(r, ROCK), top: CHALK, topAmount: 0.06, rough: 0.16 }),
   decorCount: 14,
   decorArea: { u0: -2.7, u1: 2.7, v0: 0.4, v1: 4.2 },
 };
