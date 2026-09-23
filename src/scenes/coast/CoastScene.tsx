@@ -1,6 +1,6 @@
 // About & Contact: sea cliff above the ocean at golden hour (spec §7.4).
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   BufferAttribute,
   BufferGeometry,
@@ -212,9 +212,12 @@ export default function CoastScene({ onReady }: SectionSceneProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onReady, sun]);
 
+  // The waves rebuild ~16k vertices and their normals on the CPU; phones do it every other frame.
+  const frame = useRef(0);
   useFrame((state) => {
     const s = getState();
     if (s.shown !== 'about' || s.env.reduced) return;
+    if (s.env.lowPower && frame.current++ % 2) return;
     animate(state.clock.elapsedTime);
   });
 

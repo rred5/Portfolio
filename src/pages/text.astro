@@ -53,9 +53,20 @@ const html = await marked.parse(fullMarkdown(portfolio));
     </p>
     <main class="text-main" set:html={html} />
     <script is:inline>
-      if (new URLSearchParams(location.search).has('fallback')) {
-        document.getElementById('fallback-note').hidden = false;
-        document.querySelector('.text-bar__back').hidden = true;
+      var reason = new URLSearchParams(location.search).get('fallback');
+      if (reason) {
+        var note = document.getElementById('fallback-note');
+        note.hidden = false;
+        if (reason === 'error') {
+          // The 3D app failed to load (e.g. a dropped connection): offer to try again.
+          note.textContent = "The 3D version couldn't load, so here's the text version. ";
+          var retry = document.createElement('a');
+          retry.href = '/';
+          retry.textContent = 'Try the 3D version again';
+          note.appendChild(retry);
+        } else {
+          document.querySelector('.text-bar__back').hidden = true;
+        }
       }
     </script>
   </body>
