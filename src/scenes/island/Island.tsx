@@ -75,7 +75,6 @@ export function Island() {
       group.name = `region-${def.section}`;
       const states: ChunkState[] = chunks.map((c) => {
         const mesh = new Mesh(c.geometry, toonVC());
-        mesh.position.copy(c.center);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         group.add(mesh);
@@ -153,7 +152,7 @@ export function Island() {
       for (const c of states) {
         if (!falling) {
           if (c.moved) {
-            c.mesh.position.copy(c.rest);
+            c.mesh.position.set(0, 0, 0);
             c.mesh.rotation.set(0, 0, 0);
             c.moved = false;
           }
@@ -164,8 +163,12 @@ export function Island() {
         const span = clock.firstDive ? 0.6 : 0.45;
         const f = clamp01((clock.p - 0.05 - c.delay * (clock.firstDive ? 1 : 0.5)) / span);
         const drop = 10 * f * f;
-        c.mesh.position.set(c.rest.x + c.drift.x * f, c.rest.y - drop, c.rest.z + c.drift.z * f);
+        // Tumble about the chunk's centre: position = centre + offset - rotated centre.
         c.mesh.setRotationFromAxisAngle(c.axis, c.spin * f);
+        c.mesh.position.copy(c.rest).applyQuaternion(c.mesh.quaternion).negate().add(c.rest);
+        c.mesh.position.x += c.drift.x * f;
+        c.mesh.position.y -= drop;
+        c.mesh.position.z += c.drift.z * f;
         // Splash when the chunk top reaches the water.
         const enter = Math.sqrt(Math.max(0.05, c.top) / 10);
         const rt = clamp01((f - enter) / 0.35);

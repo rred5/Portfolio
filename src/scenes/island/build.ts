@@ -1,7 +1,7 @@
 // Island geometry (spec §6.1). Each region is cut into chunks (3 angular × 3 radial) so the regions
 // that aren't selected can break apart and fall into the sea during the dive (spec §9.2). Every chunk
 // carries the terrain it covers plus the decorations standing on it, merged into one mesh.
-import { BufferAttribute, BufferGeometry, ConeGeometry, CylinderGeometry, Vector3, type ColorRepresentation } from 'three';
+import { BufferAttribute, BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3, type ColorRepresentation } from 'three';
 import type { EnvId } from '../../config/sections';
 import { fbm } from '../../lib/noise';
 import { pick, rng, range, type Rng } from '../../lib/rng';
@@ -19,7 +19,11 @@ const ANG_SPLITS = 3;
 
 export interface ChunkBuild {
   geometry: BufferGeometry;
-  /** Rest position (geometry is centred on it). */
+  /**
+   * Middle of the chunk's footprint: the pivot it tumbles about when it falls. The geometry stays in
+   * region coordinates, so at rest every chunk of a region shares one transform and the seams
+   * between chunks stay watertight (no pixel cracks sparkling as the camera or region moves).
+   */
   center: Vector3;
   /** Height of the chunk top above water, for splash timing. */
   top: number;
@@ -90,7 +94,8 @@ function buildChunkTerrain(def: RegionDef, sector: number, ring: number): Buffer
     // Position across the whole region (0..1), so chunk seams inside a region line up.
     const t = (sector * na + i) / (ANG_SPLITS * na);
     for (let j = 0; j <= nf; j++) {
-      const f = f0 + ((f1 - f0) * j) / nf;
+      // Exact ring edges, so neighbouring chunks share bit-identical seam vertices.
+      const f = j === 0 ? f0 : j === nf ? f1 : f0 + ((f1 - f0) * j) / nf;
       const a = regionAngle(def, t, f);
       const R = islandRadius(a);
       const x = Math.cos(a) * f * R;
@@ -124,14 +129,20 @@ function buildChunkTerrain(def: RegionDef, sector: number, ring: number): Buffer
     }
   }
 
-  // Side skirts down below the water, with a lip band just under the top edge.
-  const skirt = (edge: Vector3[]) => {
+  // Side skirts down below the water, with a lip band just under the top edge. On the seams between
+  // chunks (only seen once the chunks break apart) the skirt is tucked in and down under this
+  // chunk's own top: flush with the edge, it would sit at exactly the neighbour's depth along the
+  // seam, z-fight with it, and the stray pixels showed up as flickering ink specks.
+  const skirt = (edge: Vector3[], seam: boolean) => {
+    const tuck = seam ? 0.05 : 0;
     for (let k = 0; k < edge.length - 1; k++) {
-      const a = edge[k]!;
-      const b = edge[k + 1]!;
-      const out = new Vector3((a.x + b.x) / 2 - center.x, 0, (a.z + b.z) / 2 - center.z).normalize();
-      const am = new Vector3(a.x, a.y - 0.28, a.z);
-      const bm = new Vector3(b.x, b.y - 0.28, b.z);
+      const a0 = edge[k]!;
+      const b0 = edge[k + 1]!;
+      const out = new Vector3((a0.x + b0.x) / 2 - center.x, 0, (a0.z + b0.z) / 2 - center.z).normalize();
+      const a = new Vector3(a0.x - out.x * tuck, a0.y - tuck, a0.z - out.z * tuck);
+      const b = new Vector3(b0.x - out.x * tuck, b0.y - tuck, b0.z - out.z * tuck);
+      const am = new Vector3(a.x, a0.y - 0.28, a.z);
+      const bm = new Vector3(b.x, b0.y - 0.28, b.z);
       const ab = new Vector3(a.x, BOTTOM, a.z);
       const bb = new Vector3(b.x, BOTTOM, b.z);
       tri(a, b, bm, out);
@@ -140,10 +151,22 @@ function buildChunkTerrain(def: RegionDef, sector: number, ring: number): Buffer
       tri(am, bb, ab, out);
     }
   };
-  skirt(grid.map((row) => row[nf]!.p));
-  skirt(grid.map((row) => row[0]!.p));
-  skirt(grid[0]!.map((g) => g.p));
-  skirt(grid[na]!.map((g) => g.p));
+  skirt(
+    grid.map((row) => row[nf]!.p),
+    ring < RADIAL.length - 2,
+  );
+  skirt(
+    grid.map((row) => row[0]!.p),
+    ring > 0,
+  );
+  skirt(
+    grid[0]!.map((g) => g.p),
+    sector > 0,
+  );
+  skirt(
+    grid[na]!.map((g) => g.p),
+    sector < ANG_SPLITS - 1,
+  );
 
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
@@ -175,11 +198,38 @@ interface Spot {
   y: number;
 }
 
+/**
+ * Height of the rendered terrain (the coarse chunk triangles, not the smooth height function) at
+ * (x, z), for the region whose decorations are being built; set by buildIsland. Things placed with
+ * it sit exactly on the ground instead of floating over or sinking into the facets.
+ */
+let groundAt: ((x: number, z: number) => number) | null = null;
+
+function groundSampler(def: RegionDef, terrain: BufferGeometry[]): (x: number, z: number) => number {
+  const mat = new MeshBasicMaterial({ side: DoubleSide });
+  const meshes = terrain.map((g) => new Mesh(g, mat));
+  const ray = new Raycaster();
+  const from = new Vector3();
+  const down = new Vector3(0, -1, 0);
+  return (x, z) => {
+    ray.set(from.set(x, 20, z), down);
+    for (const h of ray.intersectObjects(meshes, false)) if (h.face && h.face.normal.y > 0.3) return h.point.y;
+    return heightAt(def.env, x, z, Math.hypot(x, z) / islandRadius(Math.atan2(z, x)));
+  };
+}
+
 function spotAt(def: RegionDef, a: number, f: number): Spot {
   const R = islandRadius(a);
   const x = Math.cos(a) * f * R;
   const z = Math.sin(a) * f * R;
-  return { a, f, x, z, y: heightAt(def.env, x, z, f) };
+  return { a, f, x, z, y: groundAt ? groundAt(x, z) : heightAt(def.env, x, z, f) };
+}
+
+/** Inverse of regionAngle: where angle a lies across the region at radius fraction f (0..1 inside). */
+function regionT(def: RegionDef, a: number, f: number): number {
+  const e0 = def.a0 + boundaryWobble(def.a0, f);
+  const e1 = def.a1 + boundaryWobble(def.a1, f);
+  return (a - e0) / (e1 - e0);
 }
 
 function scatter(def: RegionDef, r: Rng, n: number, fMin: number, fMax: number, avoid: Spot[], minDist: number): Spot[] {
@@ -270,22 +320,24 @@ function cityDecor(def: RegionDef, r: Rng): Deco[] {
 const STRATA = ['#e8a15a', '#d98446', '#f0b878', '#c96f3b'];
 
 /**
- * A tier of the terrace: a prism over the polar sector a0..a1, f0..f1 of the island, from y0 up to
- * y1, with strata-banded sides and a grassy top. The rim wobbles a little so it reads as rock.
+ * A tier of the terrace: a prism over the part of the region between t0..t1 (across it, following
+ * the winding channel) and f0..f1 (radius fraction), from y0 up to y1, with strata-banded sides
+ * and a grassy top. The rim wobbles a little so it reads as rock.
  */
-function terraceTier(r: Rng, a0: number, a1: number, f0: number, f1: number, y0: number, y1: number): BufferGeometry {
-  const n = 10;
+function terraceTier(def: RegionDef, r: Rng, t0: number, t1: number, f0: number, f1: number, y0: number, y1: number): BufferGeometry {
+  const n = 12;
   const seed = Math.floor(r() * 1000);
-  const rim = (a: number, f: number): [number, number] => {
+  const rim = (t: number, f: number): [number, number] => {
+    const a = regionAngle(def, t, f);
     const R = islandRadius(a) * (f + 0.03 * fbm(a * 6, f * 6, seed));
     return [Math.cos(a) * R, Math.sin(a) * R];
   };
   const outer: [number, number][] = [];
   const inner: [number, number][] = [];
   for (let i = 0; i <= n; i++) {
-    const a = a0 + ((a1 - a0) * i) / n;
-    outer.push(rim(a, f1));
-    inner.push(rim(a, f0));
+    const t = t0 + ((t1 - t0) * i) / n;
+    outer.push(rim(t, f1));
+    inner.push(rim(t, f0));
   }
   const loop = [...outer, ...inner.reverse()];
   const pos: number[] = [];
@@ -308,10 +360,11 @@ function terraceTier(r: Rng, a0: number, a1: number, f0: number, f1: number, y0:
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   g.computeVertexNormals();
-  // Faces may be wound either way: paint both, and render the prism double-sided through flat
-  // normals that face out (fix any inward face).
+  // Faces may be wound either way: turn every top face up and every side face away from the
+  // prism's centre line.
   const p = g.getAttribute('position');
   const nrm = g.getAttribute('normal');
+  const mid = rim((t0 + t1) / 2, (f0 + f1) / 2);
   for (let t = 0; t < p.count; t += 3) {
     const cx = (p.getX(t) + p.getX(t + 1) + p.getX(t + 2)) / 3;
     const cz = (p.getZ(t) + p.getZ(t + 1) + p.getZ(t + 2)) / 3;
@@ -320,8 +373,6 @@ function terraceTier(r: Rng, a0: number, a1: number, f0: number, f1: number, y0:
       if (ny < 0) swapWinding(p, t);
       continue;
     }
-    // Side faces point away from the prism's centre line.
-    const mid = rim((a0 + a1) / 2, (f0 + f1) / 2);
     const out = (cx - mid[0]) * nrm.getX(t) + (cz - mid[1]) * nrm.getZ(t);
     if (out < 0) swapWinding(p, t);
   }
@@ -337,64 +388,146 @@ function swapWinding(p: BufferAttribute | import('three').InterleavedBufferAttri
   p.setXYZ(t + 2, x, y, z);
 }
 
+/** Where the terrace starts across the summer region (t); the farmland stays short of it. */
+const TERRACE_T = 0.68;
+
 /**
  * Summer region: a tiered sandstone terrace over its outer-left third (national-park style), and
- * farmland on the rest: wheat and green fields, a red barn, silo and farmhouse, fences, hay bales.
+ * farmland on the rest. The farm is laid out on a grid turned toward the camera: a farmyard with the
+ * barn, silo and farmhouse nearest the middle of the island, and fields beyond it. A field is kept
+ * only when it lies wholly inside the region and clear of the terrace, and everything is placed on
+ * the rendered ground, so nothing overlaps or pokes through the terrain.
  */
 function plainsDecor(def: RegionDef, r: Rng): Deco[] {
   const out: Deco[] = [];
-  const A = (t: number) => def.a0 + (def.a1 - def.a0) * t;
-  // Terrace: three stacked tiers, each smaller, toward the island's edge.
-  const base = heightAt(def.env, 0, 0, 0.6) - 0.1;
+  const ground = (x: number, z: number) => (groundAt ? groundAt(x, z) : heightAt(def.env, x, z, 0.5));
+  // Terrace: three stacked tiers, each smaller, toward the island's edge. The lowest is sunk well
+  // into the ground so its foot never shows a gap where the terrain dips.
+  const base = heightAt(def.env, 0, 0, 0.6) - 0.3;
   const tiers: [number, number, number, number, number][] = [
-    [0.64, 0.92, 0.34, 0.97, 0.75],
-    [0.7, 0.9, 0.48, 0.93, 0.7],
-    [0.75, 0.87, 0.6, 0.89, 0.65],
+    [TERRACE_T, 0.95, 0.34, 0.93, 0.95],
+    [TERRACE_T + 0.05, 0.93, 0.48, 0.9, 0.7],
+    [TERRACE_T + 0.1, 0.91, 0.6, 0.87, 0.65],
   ];
   let y = base;
   for (const [t0, t1, f0, f1, h] of tiers) {
-    out.push({ geometry: terraceTier(r, A(t0), A(t1), f0, f1, y, y + h), a: A((t0 + t1) / 2), f: (f0 + f1) / 2 });
+    const tm = (t0 + t1) / 2;
+    const fm = (f0 + f1) / 2;
+    out.push({ geometry: terraceTier(def, r, t0, t1, f0, f1, y, y + h), a: regionAngle(def, tm, fm), f: fm });
     y += h;
   }
-  const yAt = (x: number, z: number) => heightAt(def.env, x, z, Math.hypot(x, z) / 9);
-  // Fields: a loose grid on the farm side, turned a little with the region.
-  const crops: Crop[] = ['wheat', 'wheat', 'green', 'plowed', 'corn'];
-  const fieldSpots: [number, number][] = [
-    [0.12, 0.42],
-    [0.12, 0.72],
-    [0.3, 0.5],
-    [0.3, 0.8],
-    [0.47, 0.35],
-    [0.47, 0.66],
-    [0.47, 0.9],
-  ];
-  for (const [t, f] of fieldSpots) {
-    const s = spotAt(def, A(t), f);
-    out.push({ geometry: field(s.x, s.z, range(r, 1.3, 1.7), range(r, 1.5, 2.0), -A(t) + Math.PI / 2 + range(r, -0.15, 0.15), pick(r, crops), yAt, 8), a: s.a, f });
+
+  // Farm grid: s runs across the region (toward the terrace), q outward from the island's middle.
+  const am = regionAngle(def, 0.33, 0.55);
+  const rx = Math.cos(am);
+  const rz = Math.sin(am);
+  const C = 5.1;
+  const at = (s: number, q: number): [number, number] => [rx * (C + q) - rz * s, rz * (C + q) + rx * s];
+  const polar = (x: number, z: number) => {
+    let a = Math.atan2(z, x);
+    if (a < def.a0 - 1) a += Math.PI * 2;
+    return { a, f: Math.hypot(x, z) / islandRadius(a) };
+  };
+  const inside = (s: number, q: number) => {
+    const { a, f } = polar(...at(s, q));
+    const t = regionT(def, a, f);
+    return f > 0.26 && f < 0.88 && t > 0.07 && t < TERRACE_T - 0.1;
+  };
+  const rectInside = (s: number, q: number, w: number, d: number) =>
+    [-1, 0, 1].every((i) => [-1, 0, 1].every((j) => inside(s + (i * w) / 2, q + (j * d) / 2)));
+  const deco = (g: BufferGeometry, s: number, q: number) => {
+    const { a, f } = polar(...at(s, q));
+    out.push({ geometry: g, a, f });
+  };
+  // Turn so a model's +z (barn doors, house front) faces outward, toward the camera side.
+  const yaw = Math.atan2(rx, rz);
+  const put = (g: BufferGeometry, s: number, q: number, scale: number, turn = 0) => {
+    const [x, z] = at(s, q);
+    deco(place(g, [x, ground(x, z), z], [0, yaw + turn, 0], scale), s, q);
+  };
+  // A patch of ground cover draped over the terrain: fields and the farmyard.
+  const patch = (s: number, q: number, w: number, d: number, crop: Crop, rows: number) => {
+    const [x, z] = at(s, q);
+    deco(field(x, z, w, d, Math.atan2(rx, -rz), crop, ground, rows, 0.04), s, q);
+  };
+
+  // Farmyard, with the barn doors, silo and farmhouse facing out over the fields.
+  const yardQ = -1.55;
+  patch(0, yardQ, 3.3, 1.5, 'yard', 1);
+  put(barn(), 0.3, yardQ - 0.05, 0.9);
+  put(silo(), 1.2, yardQ - 0.35, 0.78);
+  put(farmhouse(), -1.1, yardQ + 0.05, 0.75);
+  // A little stack of square bales by the barn.
+  for (const [s, q, up] of [
+    [1.22, yardQ + 0.36, 0],
+    [1.22, yardQ + 0.53, 0],
+    [1.22, yardQ + 0.445, 1],
+  ] as const) {
+    const [x, z] = at(s, q);
+    deco(place(box(0.24, 0.12, 0.16, '#e8c547'), [x, ground(x, z) + 0.1 + up * 0.12, z], [0, yaw + 0.1, 0]), s, q);
   }
-  // Farmstead near the middle of the farmland.
-  const farm = spotAt(def, A(0.3), 0.2);
-  const face = Math.atan2(-farm.x, -farm.z) + Math.PI;
-  out.push({ geometry: place(barn(), [farm.x, farm.y, farm.z], [0, face, 0], 0.95), a: farm.a, f: farm.f });
-  const siloAt = spotAt(def, A(0.4), 0.22);
-  out.push({ geometry: place(silo(), [siloAt.x, siloAt.y, siloAt.z], [0, 0, 0], 0.8), a: siloAt.a, f: siloAt.f });
-  const house = spotAt(def, A(0.16), 0.24);
-  out.push({ geometry: place(farmhouse(), [house.x, house.y, house.z], [0, face + 0.3, 0], 0.8), a: house.a, f: house.f });
-  for (let k = 0; k < 4; k++) {
-    const s = spotAt(def, A(0.22 + k * 0.05), 0.58 + 0.02 * k);
-    out.push({ geometry: place(hayBale(), [s.x, s.y, s.z], [0, r() * 3, 0], 0.13), a: s.a, f: s.f });
+  // Fence along the yard's field side, open at the barn doors.
+  for (const [s0, s1] of [
+    [-1.6, -0.2],
+    [0.8, 1.6],
+  ] as const) {
+    const [x0, z0] = at(s0, yardQ + 0.78);
+    const [x1, z1] = at(s1, yardQ + 0.78);
+    deco(fence(x0, z0, x1, z1, ground, 0.6), (s0 + s1) / 2, yardQ + 0.78);
   }
-  const f0 = spotAt(def, A(0.08), 0.3);
-  const f1 = spotAt(def, A(0.55), 0.3);
-  out.push({ geometry: fence(f0.x, f0.z, f1.x, f1.z, f0.y, 0.7), a: A(0.3), f: 0.3 });
-  // Tree line along the terrace foot, and a few trees about the farm.
-  for (const s of scatter(def, r, 6, 0.3, 0.9, [farm, siloAt, house], 1.0)) {
-    if (s.a > A(0.6)) continue;
-    out.push({ geometry: place(tree(r, range(r, 0.6, 0.85)), [s.x, s.y, s.z]), a: s.a, f: s.f });
+
+  // Fields: 1.1 × 1.05 plots with grass paths between, kept only where they fit. Crops that stand
+  // out from the grass (no plain green).
+  const crops: Crop[] = ['wheat', 'plowed', 'corn', 'wheat', 'wheat', 'plowed', 'corn', 'wheat'];
+  const fields: [number, number, number, number, Crop][] = [];
+  for (const q of [-0.15, 1.05, 2.25]) {
+    for (const sC of [-3.75, -2.5, -1.25, 0, 1.25, 2.5, 3.75]) {
+      const w = 1.1;
+      const d = 1.05;
+      if (!rectInside(sC, q, w, d)) continue;
+      const crop = crops[fields.length % crops.length]!;
+      patch(sC, q, w, d, crop, crop === 'plowed' ? 6 : 8);
+      fields.push([sC, q, w, d, crop]);
+    }
   }
-  for (let k = 0; k < 5; k++) {
-    const s = spotAt(def, A(0.6), 0.3 + k * 0.13);
-    out.push({ geometry: place(tree(r, range(r, 0.6, 0.8)), [s.x, s.y, s.z]), a: s.a, f: s.f });
+
+  // Trees: a windbreak along the terrace foot, and a few about the farmyard, clear of the fields
+  // and the buildings.
+  const clear = (s: number, q: number, pad: number) =>
+    fields.every(([fs, fq, w, d]) => Math.abs(s - fs) > w / 2 + pad || Math.abs(q - fq) > d / 2 + pad) &&
+    !(Math.abs(q - yardQ) < 0.75 + pad && Math.abs(s) < 1.65 + pad);
+  for (let i = 0; i < 6; i++) {
+    const f = 0.4 + i * 0.09;
+    const a = regionAngle(def, TERRACE_T - 0.045, f);
+    const R = islandRadius(a) * f;
+    const x = Math.cos(a) * R;
+    const z = Math.sin(a) * R;
+    out.push({ geometry: place(tree(r, range(r, 0.55, 0.7)), [x, ground(x, z), z]), a, f });
+  }
+  for (const [s, q] of [
+    [-2.3, -1.6],
+    [2.35, -1.3],
+    [-2.0, -2.3],
+  ] as const) {
+    if (!inside(s, q) || !clear(s, q, 0.3)) continue;
+    put(tree(r, range(r, 0.6, 0.8)), s, q, 1, r() * 3);
+  }
+  // A loose line of trees out on the meadow beyond the fields, toward the shore.
+  let placed = 0;
+  for (const [s, q] of [
+    [2.9, 3.0],
+    [1.7, 3.35],
+    [0.3, 3.2],
+    [-1.1, 3.1],
+    [-2.4, 2.8],
+    [3.3, 2.0],
+  ] as const) {
+    if (placed >= 4) break;
+    const { a, f } = polar(...at(s, q));
+    const t = regionT(def, a, f);
+    if (f > 0.9 || t < 0.08 || t > TERRACE_T - 0.06 || !clear(s, q, 0.35)) continue;
+    put(tree(r, range(r, 0.6, 0.8)), s, q, 1, r() * 3);
+    placed++;
   }
   return out;
 }
@@ -527,7 +660,9 @@ export function buildIsland(): RegionBuild[] {
     for (let sector = 0; sector < ANG_SPLITS; sector++) {
       for (let ring = 0; ring < RADIAL.length - 1; ring++) parts.push([buildChunkTerrain(def, sector, ring)]);
     }
+    groundAt = groundSampler(def, parts.map((p) => p[0]!));
     for (const d of DECOR[def.env](def, r)) parts[chunkIndex(def, d.a, d.f)]!.push(d.geometry);
+    groundAt = null;
 
     const chunks = parts.map((list, idx): ChunkBuild => {
       const g = merge(list);
@@ -535,7 +670,6 @@ export function buildIsland(): RegionBuild[] {
       g.computeBoundingBox();
       const bb = g.boundingBox!;
       const center = new Vector3((bb.min.x + bb.max.x) / 2, 0, (bb.min.z + bb.max.z) / 2);
-      g.translate(-center.x, 0, -center.z);
       g.computeBoundingSphere();
       return {
         geometry: g,

@@ -85,36 +85,55 @@ export function hayBale(): BufferGeometry {
   return place(cylinder(1, 1, 1.1, 10, '#e8c547'), [0, 1, 0], [0, 0, Math.PI / 2]);
 }
 
-/** Fence line from (x0, z0) to (x1, z1) at height y: posts and two rails. */
-export function fence(x0: number, z0: number, x1: number, z1: number, y: number, scale = 1): BufferGeometry {
+/**
+ * Fence line from (x0, z0) to (x1, z1): posts and two rails. `y` is the ground height, or a function
+ * giving it, in which case each post stands on the ground and the rails follow the slope.
+ */
+export function fence(x0: number, z0: number, x1: number, z1: number, y: number | ((x: number, z: number) => number), scale = 1): BufferGeometry {
   const parts: BufferGeometry[] = [];
+  const ground = typeof y === 'number' ? () => y : y;
   const len = Math.hypot(x1 - x0, z1 - z0);
   const n = Math.max(2, Math.round(len / (0.5 * scale)));
   const ang = Math.atan2(z1 - z0, x1 - x0);
+  const posts: [number, number, number][] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    parts.push(place(box(0.05 * scale, 0.3 * scale, 0.05 * scale, '#8c6a4a'), [x0 + (x1 - x0) * t, y + 0.15 * scale, z0 + (z1 - z0) * t]));
+    const x = x0 + (x1 - x0) * t;
+    const z = z0 + (z1 - z0) * t;
+    posts.push([x, ground(x, z), z]);
+    parts.push(place(box(0.05 * scale, 0.3 * scale, 0.05 * scale, '#8c6a4a'), [x, posts[i]![1] + 0.15 * scale, z]));
   }
-  for (const h of [0.12, 0.24]) {
-    parts.push(place(box(len, 0.03 * scale, 0.03 * scale, '#a07a52'), [(x0 + x1) / 2, y + h * scale, (z0 + z1) / 2], [0, -ang, 0]));
+  // Rails run post to post, so they follow the ground.
+  for (let i = 0; i < n; i++) {
+    const [ax, ay, az] = posts[i]!;
+    const [bx, by, bz] = posts[i + 1]!;
+    const seg = Math.hypot(bx - ax, bz - az);
+    const tilt = Math.atan2(by - ay, seg);
+    for (const h of [0.12, 0.24]) {
+      parts.push(place(box(seg, 0.03 * scale, 0.03 * scale, '#a07a52'), [(ax + bx) / 2, (ay + by) / 2 + h * scale, (az + bz) / 2], [0, -ang, tilt]));
+    }
   }
   return merge(parts);
 }
 
-export type Crop = 'wheat' | 'green' | 'plowed' | 'corn';
+export type Crop = 'wheat' | 'green' | 'plowed' | 'corn' | 'yard';
 
 const CROP: Record<Crop, [ColorRepresentation, ColorRepresentation]> = {
   wheat: ['#e8c547', '#d6ae36'],
   green: ['#7cc24a', '#69ad3c'],
   plowed: ['#a8713f', '#8f5d33'],
   corn: ['#9bcf4f', '#6f9e33'],
+  // Packed earth of a farmyard.
+  yard: ['#cfae78', '#cfae78'],
 };
 
 /**
- * A rectangular field centred at (x, z), rotated by `rot`, with crop rows as alternating stripes.
- * `yAt` gives the ground height under each corner so the field drapes over gentle terrain.
+ * A rectangular field centred at (x, z), its width along the direction `rot` (angle in the xz
+ * plane), with crop rows as alternating stripes. `yAt` gives the ground height; the field is cut
+ * into small cells that each follow it, lifted by `lift`, so it drapes over the terrain without the
+ * ground poking through (or the field z-fighting with it).
  */
-export function field(x: number, z: number, w: number, d: number, rot: number, crop: Crop, yAt: (x: number, z: number) => number, rows = 10): BufferGeometry {
+export function field(x: number, z: number, w: number, d: number, rot: number, crop: Crop, yAt: (x: number, z: number) => number, rows = 10, lift = 0.02): BufferGeometry {
   const [a, b] = CROP[crop];
   const parts: BufferGeometry[] = [];
   const c = Math.cos(rot);
@@ -122,14 +141,24 @@ export function field(x: number, z: number, w: number, d: number, rot: number, c
   const at = (lx: number, lz: number): [number, number, number] => {
     const wx = x + lx * c - lz * s;
     const wz = z + lx * s + lz * c;
-    return [wx, yAt(wx, wz) + 0.02, wz];
+    return [wx, yAt(wx, wz) + lift, wz];
   };
+  const cols = Math.max(1, Math.ceil(w / 0.25));
+  const sub = Math.max(1, Math.ceil(d / rows / 0.25));
   for (let i = 0; i < rows; i++) {
-    const z0 = -d / 2 + (d * i) / rows;
-    const z1 = -d / 2 + (d * (i + 1)) / rows;
-    const p = [at(-w / 2, z0), at(w / 2, z0), at(w / 2, z1), at(-w / 2, z1)];
+    const pos: number[] = [];
+    for (let k = 0; k < sub; k++) {
+      const z0 = -d / 2 + (d * (i + k / sub)) / rows;
+      const z1 = -d / 2 + (d * (i + (k + 1) / sub)) / rows;
+      for (let j = 0; j < cols; j++) {
+        const x0 = -w / 2 + (w * j) / cols;
+        const x1 = -w / 2 + (w * (j + 1)) / cols;
+        const p = [at(x0, z0), at(x1, z0), at(x1, z1), at(x0, z1)];
+        pos.push(...p[0]!, ...p[2]!, ...p[1]!, ...p[0]!, ...p[3]!, ...p[2]!);
+      }
+    }
     const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(new Float32Array([...p[0]!, ...p[2]!, ...p[1]!, ...p[0]!, ...p[3]!, ...p[2]!]), 3));
+    g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
     g.computeVertexNormals();
     parts.push(paint(g, i % 2 ? a : b));
   }
