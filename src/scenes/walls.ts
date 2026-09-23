@@ -127,7 +127,7 @@ export const coastWall: WallDef = {
   pelvisMin: 0.92,
   handOffsetV: 0,
   framing: {
-    landscape: { u: 0.2, v: 2.0, d: 0.4, yaw: -24, pitch: 6, fitW: 5.0, fitH: 5.2, fov: 38 },
+    landscape: { u: 0.6, v: 2.2, d: 0.4, yaw: -30, pitch: 10, fitW: 5.6, fitH: 5.2, fov: 38 },
     portrait: { u: 0, v: 2.65, d: 0.4, yaw: -14, pitch: 6, fitW: 4.0, fitH: 4.6, fov: 40 },
   },
 };

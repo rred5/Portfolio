@@ -1,10 +1,11 @@
-// A couple of small gull flocks circling over the island, flapping now and then (island life).
+// Small gull flocks circling, gliding with a burst of flaps now and then (island and sea cliff).
 import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import { BufferAttribute, BufferGeometry, DoubleSide, InstancedMesh, Matrix4, MeshToonMaterial, Quaternion, Vector3 } from 'three';
 import { rng, range } from '../../lib/rng';
 import { toonRamp } from '../../render/toon';
 import { getState } from '../../state/store';
+import type { ViewId } from '../../state/types';
 
 /** Two wings meeting at the body, body pointing +z. Flapping flips the wing tips through y. */
 function gullGeometry(): BufferGeometry {
@@ -28,7 +29,8 @@ interface Gull {
   flap: number;
 }
 
-const FLOCKS: [number, number, number, number][] = [
+/** Island flocks: centre x, centre z, radius, height. */
+const ISLAND_FLOCKS: [number, number, number, number][] = [
   // centre x, centre z, radius, height
   [-2.5, 1.5, 6.5, 6.2],
   [3.5, -2.5, 5, 7.4],
@@ -40,11 +42,11 @@ const p = new Vector3();
 const s = new Vector3();
 const UP = new Vector3(0, 1, 0);
 
-export function Gulls() {
+export function Gulls({ section = 'island', flocks = ISLAND_FLOCKS, size = 1.4 }: { section?: ViewId; flocks?: [number, number, number, number][]; size?: number }) {
   const { mesh, gulls } = useMemo(() => {
     const r = rng(61);
     const gulls: Gull[] = [];
-    FLOCKS.forEach(([cx, cz, radius, y], f) => {
+    flocks.forEach(([cx, cz, radius, y], f) => {
       const base = r() * Math.PI * 2;
       const dir = f % 2 ? -1 : 1;
       for (let i = 0; i < 3 + f; i++) {
@@ -63,11 +65,11 @@ export function Gulls() {
     const mesh = new InstancedMesh(gullGeometry(), mat, gulls.length);
     mesh.frustumCulled = false;
     return { mesh, gulls };
-  }, []);
+  }, [flocks]);
 
   useFrame((state) => {
     const st = getState();
-    if (st.shown !== 'island') return;
+    if (st.shown !== section) return;
     const t = st.env.reduced ? 0 : state.clock.elapsedTime;
     gulls.forEach((g, i) => {
       const a = g.phase + t * g.speed;
@@ -78,7 +80,7 @@ export function Gulls() {
       // Glide most of the time, with a burst of flaps every few seconds.
       const burst = Math.sin(t * 0.9 + g.flap) > 0.4;
       const wing = burst ? Math.sin(t * 14 + g.flap) : 0.7;
-      s.set(1.4, wing * 1.4, 1.4);
+      s.set(size, wing * size, size);
       m.compose(p, q, s);
       mesh.setMatrixAt(i, m);
     });

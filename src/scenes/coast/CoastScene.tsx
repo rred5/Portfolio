@@ -18,7 +18,7 @@ import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { fbm } from '../../lib/noise';
 import { pick, rng, range } from '../../lib/rng';
-import { flat, jitter, merge, paintFaces, place, rock } from '../../render/geo';
+import { box, flat, jitter, merge, paintFaces, place, rock } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
 import { shadowMap } from '../../render/shadows';
 import { toonVC } from '../../render/toon';
@@ -26,13 +26,16 @@ import { noInk } from '../../state/registry';
 import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
 import { Particles } from '../common/ambient';
+import { barrel, dinghy, fishCrate, fishingBoat, pier } from '../common/harbor';
+import { Gulls } from '../island/Gulls';
 import { wallLayout } from '../layouts';
 import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
 import { edgeRoll, reliefMesh } from '../wall/surface';
 import { coastWall } from '../walls';
 
-const SEA_Y = -2.5;
+/** Sea level, well below the start ledge: the climb starts high on the cliff. */
+const SEA_Y = -14;
 const ROCK = ['#b8735a', '#a8664f', '#c98a6a', '#9e6049'];
 
 const CHALK = '#fff6ea';
@@ -59,7 +62,8 @@ function buildScene() {
     roll: edgeRoll({ right: [2.8, 3.9, 2.8], top: [1.0, 1.3] }),
     color: (u, v, n) => {
       if (n.y > 0.62 && v > 5.4) return fbm(u * 2, v, 8) > 0 ? '#8cc956' : '#7dbb4a';
-      if (v < 0.25) return v < -1.8 ? '#4a302a' : '#5e3e36';
+      // Wet, dark rock just above the waterline; the cliff below the ledge keeps its bands.
+      if (v < SEA_Y + 1.6) return v < SEA_Y + 0.6 ? '#4a302a' : '#5e3e36';
       const depth = def.surface(u, v);
       if (depth < -0.08) return '#5e3e36';
       if (n.y > 0.45) return '#e0ac86';
@@ -73,7 +77,6 @@ function buildScene() {
   const ledgeG = new IcosahedronGeometry(1, 1);
   jitter(ledgeG, 0.06, r);
   parts.push(place(paintFaces(flat(ledgeG), (_c, n) => (n.y > 0.5 ? '#c98a6a' : '#6e4a3e')), [0.1, -0.35, 0.55], [0, 0, 0], [1.9, 0.38, 0.75]));
-  parts.push(place(rock(r, 0.8, '#6e4a3e', 1, 0.2), [0.2, -1.6, 0.4], [0, 0, 0], [1.6, 1.3, 0.8]));
 
   // Headland mass behind the face, and the cliff line receding to the left.
   const back = new IcosahedronGeometry(1, 2);
@@ -103,9 +106,10 @@ function buildScene() {
     );
   };
   parts.push(shoulder(3.6, -1.6, 5.4, 1.9, 2.4));
-  parts.push(shoulder(5.0, -2.4, 3.2, 1.8, 2.2));
-  parts.push(shoulder(6.3, -3.0, 0.9, 1.6, 2.0));
-  parts.push(shoulder(7.2, -2.2, -1.6, 1.3, 1.4));
+  parts.push(shoulder(5.2, -2.6, 1.5, 2.2, 2.6));
+  parts.push(shoulder(7.0, -3.4, -4.0, 2.6, 2.8));
+  parts.push(shoulder(9.2, -3.0, -9.5, 2.8, 2.6));
+  parts.push(shoulder(11.6, -4.2, -12.6, 2.4, 2.2));
 
   // Wet boulders along the waterline, darker below the tide mark.
   for (let i = 0; i < 12; i++) {
@@ -117,6 +121,29 @@ function buildScene() {
     jitter(g, 0.2, r);
     parts.push(place(paintFaces(flat(g), (c, n) => (n.y > 0.5 && c.y > 0 ? '#a8664f' : '#5e3e36')), [x, SEA_Y + s * 0.2, z], [0, r() * 3, 0], [s * 1.3, s, s]));
   }
+  // The harbour along the coast: a rocky landing, a wooden pier running out to sea with a hut,
+  // crates and barrels on it, and fishing boats moored alongside.
+  const H: [number, number] = [26, -12];
+  const PA = 0.5;
+  const along = (d: number, off = 0): [number, number] => [H[0] + Math.cos(PA) * d + Math.sin(PA) * off, H[1] - Math.sin(PA) * d + Math.cos(PA) * off];
+  parts.push(place(rock(r, 3, '#8c5a4a', 1, 0.15), [H[0] - 2, SEA_Y - 0.6, H[1] + 1], [0, 0, 0], [1.8, 0.55, 1.6]));
+  parts.push(place(pier(22, 2.4, 1.2, 3), [H[0], SEA_Y, H[1]], [0, PA, 0]));
+  const hut = along(1.4, -2.2);
+  parts.push(place(merge([box(2.2, 1.6, 1.8, '#f4f1ea'), place(box(2.5, 0.2, 2.1, '#2f86c4'), [0, 0.9, 0]), place(box(0.5, 0.9, 0.05, '#6b4a2e'), [0, -0.35, 0.92])]), [hut[0], SEA_Y + 1.2, hut[1]], [0, PA, 0]));
+  for (let k = 0; k < 5; k++) {
+    const [x, z] = along(4 + k * 2.8, 0.7);
+    const g = k % 2 ? place(barrel(), [0, 0, 0], [0, 0, 0], 0.8) : place(fishCrate(r), [0, 0, 0], [0, r(), 0], 0.8);
+    parts.push(place(g, [x, SEA_Y + 1.28, z]));
+  }
+  for (const [d, side, color] of [
+    [8, 1, '#e8423c'],
+    [14, -1, '#3ee0c5'],
+    [20, 1, '#ffd23f'],
+  ] as const) {
+    const [x, z] = along(d, 2.7 * side);
+    parts.push(place(fishingBoat(color), [x, SEA_Y - 0.05, z], [0, PA + r() * 0.2, 0], 7));
+  }
+
   for (let i = 0; i < 7; i++) {
     const x = range(r, -110, -30);
     const z = range(r, -150, -50);
@@ -166,6 +193,42 @@ function waveY(x: number, z: number, t: number) {
   return 0.13 * Math.sin(x * 0.55 + t * 1.1) + 0.09 * Math.sin(z * 0.8 - t * 0.9 + x * 0.2) + 0.05 * Math.sin((x + z) * 1.3 + t * 1.7);
 }
 
+/** Boats out working: circling slowly on the swell (centre x, z, radius, speed, scale, colour). */
+const WORKING: [number, number, number, number, number, string][] = [
+  [42, -32, 12, 0.05, 8, '#e8423c'],
+  [70, -8, 9, -0.07, 8, '#2f86c4'],
+  [28, 12, 6, 0.09, 5, '#3ee0c5'],
+];
+
+const GULL_FLOCKS: [number, number, number, number][] = [
+  [22, -6, 10, SEA_Y + 16],
+  [48, -26, 14, SEA_Y + 22],
+];
+
+function WorkingBoats() {
+  const boats = useMemo(() => WORKING.map(([, , , , , c], i) => new Mesh(i === 2 ? dinghy(c) : fishingBoat(c), toonVC())), []);
+  useFrame((state) => {
+    const s = getState();
+    if (s.shown !== 'about') return;
+    const t = s.env.reduced ? 0 : state.clock.elapsedTime;
+    boats.forEach((b, i) => {
+      const [cx, cz, rad, speed, scale] = WORKING[i]!;
+      const a = i * 2.1 + t * speed;
+      b.position.set(cx + Math.cos(a) * rad, SEA_Y - 0.05 + Math.sin(t * 1.3 + i) * 0.12, cz + Math.sin(a) * rad);
+      // Bow along the direction of travel, rolling a little on the swell.
+      b.rotation.set(Math.sin(t * 1.1 + i) * 0.06, -a - (speed > 0 ? Math.PI / 2 : -Math.PI / 2), Math.sin(t * 0.9 + i * 2) * 0.04);
+      b.scale.setScalar(scale);
+    });
+  });
+  return (
+    <group>
+      {boats.map((b, i) => (
+        <primitive key={i} object={b} />
+      ))}
+    </group>
+  );
+}
+
 export default function CoastScene({ onReady }: SectionSceneProps) {
   const layout = wallLayout('about');
   const world = useMemo(buildScene, []);
@@ -204,7 +267,7 @@ export default function CoastScene({ onReady }: SectionSceneProps) {
 
   useEffect(() => {
     animate(0);
-    const off = registerAtmosphere('about', { fog: new Fog('#ffc9a0', 30, 170), background: '#ffc9a0' });
+    const off = registerAtmosphere('about', { fog: new Fog('#ffc9a0', 45, 260), background: '#ffc9a0' });
     onReady();
     return () => {
       off();
@@ -256,6 +319,8 @@ export default function CoastScene({ onReady }: SectionSceneProps) {
         drift={0.18}
         seed={33}
       />
+      <WorkingBoats />
+      <Gulls section="about" flocks={GULL_FLOCKS} size={2.4} />
       <Holds layout={layout} style={style} />
       <Climber layout={layout} outfit={OUTFITS.coast} />
     </group>
