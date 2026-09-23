@@ -744,6 +744,11 @@
   transition: opacity 0.2s linear;
 }
 
+.boot {
+  position: fixed;
+  z-index: 1;
+}
+
 .loading[data-done='1'] {
   opacity: 0;
   pointer-events: none;

@@ -47,6 +47,8 @@ export default function App({ initial }: { initial: ViewId }) {
   useEffect(() => {
     // Spec §15.5: no WebGL2 → text version with a note.
     if (!webgl) location.replace('/text?fallback=webgl');
+    // The app's own loading screen is mounted now; drop the static one from the HTML.
+    else document.getElementById('boot')?.remove();
   }, [webgl]);
 
   if (!webgl) return null;

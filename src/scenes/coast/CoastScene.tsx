@@ -17,8 +17,8 @@ import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { fbm } from '../../lib/noise';
-import { pick, rng, range, type Rng } from '../../lib/rng';
-import { flat, jitter, merge, paint, paintFaces, place, rock } from '../../render/geo';
+import { pick, rng, range } from '../../lib/rng';
+import { flat, jitter, merge, paintFaces, place, rock } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
 import { toonVC } from '../../render/toon';
 import { noInk } from '../../state/registry';
@@ -33,12 +33,6 @@ import { coastWall } from '../walls';
 
 const SEA_Y = -2.5;
 const ROCK = ['#b8735a', '#a8664f', '#c98a6a', '#9e6049'];
-
-function ledge(r: Rng, w: number, color: string): BufferGeometry {
-  const g = new IcosahedronGeometry(1, 0);
-  jitter(g, 0.18, r);
-  return place(paint(flat(g), color), [0, 0, w * 0.18], [0, 0, 0], [w, w * 0.22, w * 0.38]);
-}
 
 const CHALK = '#fff6ea';
 

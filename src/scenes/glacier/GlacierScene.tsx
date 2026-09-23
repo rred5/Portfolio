@@ -36,12 +36,6 @@ import { glacierWall } from '../walls';
 
 const ICE = ['#7fd3f7', '#a8e4fa', '#6ac4ef', '#94dcf8'];
 
-function iceBump(r: Rng, size: number, color: string): BufferGeometry {
-  const g = new IcosahedronGeometry(size, 1);
-  jitter(g, size * 0.15, r);
-  return place(paint(flat(g), color), [0, 0, size * 0.3], [0, 0, 0], [1.3, 0.8, 0.65]);
-}
-
 /** Ice bulges with a snow cap; the axe placements get a chipped pick mark. */
 const style: HoldStyle = {
   interactive: (r) =>
@@ -108,13 +102,12 @@ function buildScene() {
   const ledges: [number, number, number][] = [
     [-1.6, 3.05, 1.3],
     [1.7, 4.75, 1.7],
-    [-2.1, 5.5, 1.0],
   ];
   for (const [u, v, w] of ledges) {
     const d = def.surface(u, v);
     const g = new IcosahedronGeometry(1, 1);
     jitter(g, 0.08, r);
-    parts.push(inWall(def, place(paint(flat(g), '#f4f8ff'), [u, v, d - 0.1], [0, 0, 0], [w / 2, 0.12, 0.38])));
+    parts.push(inWall(def, place(paint(flat(g), '#f4f8ff'), [u, v, d - 0.1], [0, 0, 0], [w / 2, 0.11, 0.27])));
     for (let k = 0; k < 7; k++) {
       const iu = u + range(r, -w / 2.4, w / 2.4);
       const len = range(r, 0.15, 0.4);
@@ -178,7 +171,7 @@ function buildScene() {
   return merge(parts);
 }
 
-/** Occasional wisp of spindrift blown off the top-left ledge (spec §7.2). */
+/** Occasional wisp of spindrift blown off the top of the left buttress (spec §7.2). */
 function Spindrift() {
   const N = 40;
   const { points, vel } = useMemo(() => {

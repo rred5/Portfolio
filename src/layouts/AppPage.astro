@@ -20,6 +20,8 @@ interface Props {
 
 assertValidContent(portfolio);
 const { initial, title, description } = Astro.props;
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
+const { profile } = portfolio;
 ---
 
 <html lang="en">
@@ -32,8 +34,22 @@ const { initial, title, description } = Astro.props;
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate" type="text/markdown" href="/llms-full.txt" title="Portfolio as Markdown" />
     <link rel="alternate" type="text/html" href="/text" title="Text version" />
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta name="twitter:card" content="summary" />
+    <noscript><style>#boot { display: none; }</style></noscript>
   </head>
   <body class="app-body">
+    <!-- Static copy of the loading screen, shown while the app script downloads; the app removes it
+         once its own loading screen is up. -->
+    <div id="boot" class="loading boot" aria-hidden="true">
+      <p class="loading__name">{profile.name}</p>
+      <p class="loading__sub">{profile.title}</p>
+      <div class="loading__bar"><div class="loading__fill" style="transform: scaleX(0.04)"></div></div>
+    </div>
     <App client:only="react" initial={initial} />
     <noscript>
       <div class="noscript">

@@ -23,7 +23,7 @@ export const gymWall: WallDef = {
   handOffsetV: 0,
   framing: {
     landscape: { u: 0, v: 1.9, d: 0.35, yaw: 16, pitch: 6, fitW: 4.6, fitH: 4.2, fov: 40 },
-    portrait: { u: 0, v: 2.05, d: 0.35, yaw: 10, pitch: 6, fitW: 4.0, fitH: 4.6, fov: 42 },
+    portrait: { u: 0, v: 2.0, d: 0.35, yaw: 10, pitch: 6, fitW: 3.55, fitH: 4.6, fov: 42 },
   },
 };
 
