@@ -236,12 +236,22 @@ function buildRig(o: Outfit): Rig {
     tie.rotation.x = 0.9;
     tie.scale.setScalar(R * 0.26);
   }
+  // Face: only seen when the climber glances back over a shoulder.
   const eyeGeo = new SphereGeometry(R * 0.12, 8, 6);
+  const cheekGeo = new SphereGeometry(R * 0.14, 8, 6);
   for (const x of [-0.34, 0.34]) {
     const eye = new Mesh(eyeGeo, toon('#151515'));
     eye.position.set(x * R, R * 0.1, R * 0.92);
     head.add(eye);
+    const cheek = new Mesh(cheekGeo, toon('#f59a8a'));
+    cheek.position.set(x * R * 1.45, -R * 0.2, R * 0.8);
+    cheek.scale.set(1, 0.6, 0.4);
+    head.add(cheek);
   }
+  const smile = new Mesh(new TorusGeometry(R * 0.26, R * 0.05, 5, 12, Math.PI), toon('#151515'));
+  smile.rotation.z = Math.PI;
+  smile.position.set(0, -R * 0.2, R * 0.93);
+  head.add(smile);
 
   const side = <T,>(f: (s: 'L' | 'R') => T): Record<'L' | 'R', T> => ({ L: f('L'), R: f('R') });
   const shoulder = side(() => makeMesh(GEO.ball, o.sleeves === 'none' ? skin : shirt, root));
@@ -276,12 +286,13 @@ function buildRig(o: Outfit): Rig {
       root.add(g);
       return g;
     });
-    chips = new InstancedMesh(flat(new TetrahedronGeometry(0.03)), toon('#c8f0ff'), 12);
-    chips.frustumCulled = false;
-    chips.count = 0;
-    root.add(chips);
-    noInk.add(chips);
   }
+  // Bits thrown off when a hand lands: ice chips from an axe, a chalk puff everywhere else.
+  chips = new InstancedMesh(o.axes ? flat(new TetrahedronGeometry(0.03)) : new SphereGeometry(0.045, 6, 4), toon(o.axes ? '#c8f0ff' : '#ffffff'), 20);
+  chips.frustumCulled = false;
+  chips.count = 0;
+  root.add(chips);
+  noInk.add(chips);
 
   return { root, torso, shorts, belt, neck, head, shoulder, upperArm, sleeve, forearm, elbow, hand, thigh, legLoop, shin, knee, foot, chalk, axes, chips };
 }
@@ -290,7 +301,28 @@ interface Chip {
   p: Vector3;
   v: Vector3;
   age: number;
+  life: number;
 }
+
+const chipScale = new Vector3();
+
+/** A small chalk cloud at `at`, blown out from the wall. */
+function puff(list: Chip[], at: Vector3, normal: Vector3, n: number) {
+  for (let i = 0; i < n; i++) {
+    list.push({
+      p: at.clone(),
+      v: new Vector3()
+        .copy(normal)
+        .multiplyScalar(0.25 + Math.random() * 0.25)
+        .add(new Vector3((Math.random() - 0.5) * 0.6, Math.random() * 0.35, (Math.random() - 0.5) * 0.2)),
+      age: 0,
+      life: 0.55 + Math.random() * 0.25,
+    });
+  }
+}
+
+/** Glance over the shoulder: ease in, hold, ease out (seconds). */
+const GLANCE = { delay: 0.2, in: 0.25, hold: 0.9, out: 0.35, turn: (130 * Math.PI) / 180 };
 
 export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit }) {
   const { def, route } = layout;
@@ -310,6 +342,8 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     landed: true,
     tick: 0,
     chips: [] as Chip[],
+    glance: -10,
+    puffed: false,
   });
 
   useEffect(() => () => {
@@ -353,6 +387,8 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
         a.reach = null;
         a.t0 = -1;
         a.chalk = -1;
+        a.glance = -10;
+        a.chips = [];
       }
       return;
     }
@@ -393,20 +429,27 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       a.cur[limb].v = lerp(a.from[limb].v, a.to[limb].v, lt);
     });
 
-    // Glacier: axe "tick" when the reaching hand lands.
+    // The reaching hand lands: axe "tick" and ice chips on the glacier, a chalk puff elsewhere; a
+    // pinned hold also gets a glance back over the shoulder.
     if (!a.landed && t >= 1) {
       a.landed = true;
-      if (rig.axes && a.reach && !reduced) {
-        a.tick = now;
+      if (a.reach && !reduced) {
         const hold = a.reach === 'L' ? a.cur.lh : a.cur.rh;
-        const p = toWorld(def, hold.u, hold.v, 0.05);
-        for (let i = 0; i < 7; i++) {
-          a.chips.push({
-            p: p.clone(),
-            v: new Vector3().copy(def.normal).multiplyScalar(0.6 + Math.random() * 0.6).add(tmp2.set((Math.random() - 0.5) * 1.2, Math.random() * 0.8, 0)),
-            age: 0,
-          });
+        const p = toWorld(def, hold.u, hold.v, 0.05 + coverDepth(def, hold.u, hold.v));
+        if (rig.axes) {
+          a.tick = now;
+          for (let i = 0; i < 7; i++) {
+            a.chips.push({
+              p: p.clone(),
+              v: new Vector3().copy(def.normal).multiplyScalar(0.6 + Math.random() * 0.6).add(tmp2.set((Math.random() - 0.5) * 1.2, Math.random() * 0.8, 0)),
+              age: 0,
+              life: 0.4,
+            });
+          }
+        } else {
+          puff(a.chips, p, def.normal, 7);
         }
+        if (s.pinnedItem && s.pinnedItem === a.targetId) a.glance = now + GLANCE.delay;
       }
     }
 
@@ -414,6 +457,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     if (rig.chalk && !reduced && t >= 1) {
       if (a.chalk < 0 && now - a.idleSince > motion.chalkIdleDelay && now > a.nextChalk) {
         a.chalk = now;
+        a.puffed = false;
         a.chalkHand = a.reach === 'L' ? 'R' : 'L';
       }
     }
@@ -426,6 +470,11 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
         a.nextChalk = now + motion.chalkEvery[0] + Math.random() * (motion.chalkEvery[1] - motion.chalkEvery[0]);
       } else {
         chalkW = ct < 0.4 ? easeInOutCubic(ct / 0.4) : ct < 0.6 ? 1 : 1 - easeInOutCubic((ct - 0.6) / 0.4);
+        // A little cloud as the hand comes out of the bag.
+        if (ct > 0.55 && !a.puffed) {
+          a.puffed = true;
+          puff(a.chips, tmp.copy(J.bag).addScaledVector(J.yb, 0.08), def.normal, 4);
+        }
       }
     }
 
@@ -501,6 +550,21 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     if (a.reach) J.look.copy(a.reach === 'L' ? J.ha.L : J.ha.R);
     else J.look.copy(J.chest).addScaledVector(def.up, 0.8);
     J.look.addScaledVector(def.normal, -0.6);
+    // Glance: turn the head about the wall's up axis toward the camera's side, into profile.
+    const g = now - a.glance;
+    const glanceW =
+      reduced || g < 0
+        ? 0
+        : g < GLANCE.in
+          ? easeInOutCubic(g / GLANCE.in)
+          : g < GLANCE.in + GLANCE.hold
+            ? 1
+            : 1 - easeInOutCubic(clamp01((g - GLANCE.in - GLANCE.hold) / GLANCE.out));
+    if (glanceW > 0) {
+      const sideSign = Math.sign(tmp.subVectors(state.camera.position, J.head).dot(def.right)) || 1;
+      tmp2.subVectors(J.look, J.head).applyAxisAngle(def.up, sideSign * GLANCE.turn * glanceW);
+      J.look.copy(J.head).add(tmp2);
+    }
     rig.head.up.copy(def.up);
     rig.head.lookAt(J.look);
 
@@ -554,15 +618,22 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       rig.chalk.quaternion.copy(J.torsoQ);
     }
 
-    // Ice chips.
+    // Ice chips fall; chalk drifts, swells and fades.
     if (rig.chips) {
       const m = rig.chips;
       let n = 0;
-      a.chips = a.chips.filter((c) => (c.age += dt) < 0.4);
+      a.chips = a.chips.filter((c) => (c.age += dt) < c.life).slice(-m.instanceMatrix.count);
       for (const c of a.chips) {
-        c.v.y -= 6 * dt;
+        let size = 1;
+        if (rig.axes) c.v.y -= 6 * dt;
+        else {
+          const k = c.age / c.life;
+          c.v.multiplyScalar(Math.max(0, 1 - 3 * dt));
+          c.v.y += 0.4 * dt;
+          size = (0.7 + 1.6 * k) * (1 - k * k);
+        }
         c.p.addScaledVector(c.v, dt);
-        basis.makeRotationY(c.age * 9).setPosition(c.p);
+        basis.makeRotationY(c.age * 9).scale(chipScale.setScalar(size)).setPosition(c.p);
         m.setMatrixAt(n++, basis);
       }
       m.count = n;
