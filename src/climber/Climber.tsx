@@ -624,10 +624,10 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       let n = 0;
       a.chips = a.chips.filter((c) => (c.age += dt) < c.life).slice(-m.instanceMatrix.count);
       for (const c of a.chips) {
-        let size = 1;
+        const k = c.age / c.life;
+        let size = 1 - k * k;
         if (rig.axes) c.v.y -= 6 * dt;
         else {
-          const k = c.age / c.life;
           c.v.multiplyScalar(Math.max(0, 1 - 3 * dt));
           c.v.y += 0.4 * dt;
           size = (0.7 + 1.6 * k) * (1 - k * k);
