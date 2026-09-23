@@ -47,17 +47,16 @@ plus screenshot checks of every view on desktop and phone. v1 is tagged `v1-save
 - **Hold ↔ card link** on desktop: a thin leader line from the pinned hold to the card.
 
 ### 3. UX
-- **Previous / next** in the card (and ← → keys) to read items in order without going back to the
-  wall.
+- ~~Previous / next in the card (and ← → keys)~~: done (v1.1).
 - **Phones**: one tap on an island region dives straight in; if accidental dives show up in
   testing, a first-tap highlight would help.
-- **Fonts**: preload the Lilita One file so the big title doesn't swap in after first paint.
+- ~~Preload the display font~~: done (v1.1).
 
 ### 4. Performance (not yet measured on real devices)
 - Measure frame rate on a mid-range Android phone and an iPhone before tuning further.
 - The coast ocean is animated on the CPU (~16k vertices + normals each frame; now every other frame
   on phones). Moving the waves into a vertex shader would remove that cost.
-- Shadow maps are 1.5–2k on every device; halve them on phones.
+- ~~Halve shadow maps on phones~~: done (v1.1).
 - JS + CSS is ~365 KB gzipped (three, postprocessing, React Three Fiber, React). Section scenes are
   already split and preloaded; the remaining size is mostly three itself.
 
