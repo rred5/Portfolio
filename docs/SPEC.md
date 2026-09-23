@@ -1,11 +1,11 @@
 # Climbing Island Portfolio: Design & Implementation Spec
 
-**Status:** DRAFT, awaiting approval. Once approved, this document is authoritative: nothing outside
-it gets built without discussing it first, and anything still undefined during implementation is
-asked about, not invented.
+**Status:** DRAFT v2, all proposals resolved, awaiting final approval. Once approved, this document is
+authoritative: nothing outside it gets built without discussing it first, and anything still undefined
+during implementation is asked about, not invented.
 
-Sections marked **[PROPOSAL Pn]** are details the brief and Q&A did not cover. Each one says what I
-intend to do; approve, change or cut them during review. The full list is in §17.
+Items tagged **[Pn]** started as proposals for details the brief didn't cover. All have now been
+answered; §17 records how each one was resolved.
 
 ---
 
@@ -49,6 +49,10 @@ the same content data.
 | D16 | Text button | Top-right, labelled **"Text version"** |
 | D17 | Transition timing | **Keep short.** All timings live in one config file and get tuned together during development |
 | D18 | Other defaults | Accepted: reduced-motion crossfades, mobile bottom sheet + tap-to-enter, URL per section, llms.txt files, loading screen, Astro + React Three Fiber, no sound/analytics |
+| D19 | Island backdrop | Island sits **in the sea**, with ocean to every edge of the screen |
+| D20 | Name placement | Island: **big, top-center** with "Developer Portfolio" underneath. Sections: **small, top-left**, and clicking it returns to the island |
+| D21 | Section top bar | Name top-left · section title small **top-middle** (centered over the wall area) · "Text version" top-right |
+| D22 | Hover preview | **View-only.** Fades out as soon as the cursor leaves the hold and can't be clicked. Clicking the hold pins the card |
 
 ---
 
@@ -74,11 +78,10 @@ the same content data.
   back/forward moves between island and sections and runs the normal transitions.
 - Pinning a card replaces the hash (`history.replaceState`, so pinning doesn't add history entries).
   Closing the card clears the hash.
-- **[PROPOSAL P1] Direct load of a section URL** (e.g. someone opens `/projects` from a link): skip the
+- **[P1] Direct load of a section URL** (e.g. someone opens `/projects` from a link): skip the
   island and dive, and show the section with a short fade-in (~0.3s). The first island→section dive
   still counts as the "first transition" if they later go to the island and back in.
-- **[PROPOSAL P2] 404:** a plain static page in the site style with links to the island and the text
-  version.
+- **[P2] 404:** a plain static page in the site style with links to the island and the text version.
 
 ### 3.2 App state machine
 
@@ -207,12 +210,8 @@ layout's slot count; `tag` ≤ 18 chars.
 - **UI style (cards, labels, buttons):** cream panels `#FFF8EC`, 3px ink borders, 12px corner radius,
   hard offset shadow (4px down/right, ink color). A game-like frame around conventional, readable
   content.
-- **Typography [PROPOSAL P3]:** pick one pairing, self-hosted:
-  1. **Lilita One** (display) + **Nunito** (body): round and friendly, closest to A Short Hike.
-  2. **Fredoka** (display) + **Inter** (body): softer display, very neutral body.
-  3. **Bungee** (display) + **Rubik** (body): blockier and more "arcade".
-
-  Display font for the name, region labels and card titles; body font for everything else.
+- **Typography [P3]:** **Lilita One** (display) + **Nunito** (body), self-hosted. Display font for
+  the name, region labels, section title and card titles; body font for everything else.
 - **Palettes** (starting values, tuned during build):
 
 | Scene | Key colors |
@@ -251,8 +250,9 @@ layout's slot count; `tag` ≤ 18 chars.
 
 - One label per region: a pill with the section label ("Projects"), anchored beside its region
   (HTML positioned over the 3D point every frame), with a short leader tick pointing at the region.
-- **[PROPOSAL P4] Label states:** default = ink pill with white text; region hover = **white pill with
-  ink text**, scale 1.06. This is how "the label highlights in white" gets implemented.
+- **[P4] Label states:** default = ink pill with white text (reads on both sea and land); region
+  hover = **white pill with ink text**, scale 1.06. This is how "the label highlights in white" gets
+  implemented.
 - Labels are real `<button>`s: hovering or focusing a label triggers the region hover; clicking one
   enters the section.
 
@@ -310,7 +310,7 @@ Common to every section:
 - **Lighting:** cold low morning sun from the side, lavender shadows.
 - **Ambient:** light snowfall (sparse, slow), occasional wisp of spindrift off a ledge.
 - **Climber outfit:** puffy jacket, helmet, gloves, mountaineering boots with crampons, two ice axes.
-- **[PROPOSAL P5] No rope** in v1. A rope adds realism but also motion-quality risk. Can be added later.
+- **[P5] No rope** in v1. Can be added later.
 
 ### 7.3 Skills: Sunny plains
 
@@ -342,10 +342,25 @@ the wall or near an interactive hold. All of it is off under reduced motion (§1
 
 ### 7.6 On-screen section chrome
 
-- **[PROPOSAL P6]** Section title (e.g. "Projects") small in the **top-left** in the display font.
-  No description text.
-- **Text version** button top-right (same as island).
+A single top bar (D20, D21):
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Your Name            Projects               [Text version] │
+│                                                            │
+│            (wall)                         │    (card)     │
+└──────────────────────────────────────────────────────────┘
+```
+
+- **Top-left:** your name, small, display font. It's a link: clicking it goes back to the island
+  (same as the nav's island button).
+- **Top-middle:** section title (e.g. "Projects"), small, display font, centered over the **wall
+  area** (the viewport minus the card column), so it stays put when a card opens. No description
+  text.
+- **Top-right:** **Text version** button (same as on the island).
 - The navigation variant (§12).
+- Mobile portrait: same three items in one row, one size step smaller; the title truncates first if space
+  runs out.
 
 ---
 
@@ -385,10 +400,11 @@ Hit areas are larger than the visible hold: at least 44×44 CSS px on touch. Tag
 | Input | Result |
 |---|---|
 | Hover hold, nothing pinned | Hover state + climber moves to that hold + **preview card** opens |
-| Leave hold, nothing pinned | Preview card closes after 0.25s unless the pointer is on the card; climber stays (D14) |
+| Leave hold, nothing pinned | Preview card fades out immediately (0.1s); climber stays (D14) |
+| Move from one hold straight onto another | Preview switches directly to the new hold's card |
 | Hover hold, card pinned | Hover state + climber moves; **pinned card unchanged** (D6) |
 | Click hold | Climber moves; that item's card becomes **pinned** (replaces any pinned card); URL hash set |
-| Click the already-pinned hold **[PROPOSAL P7]** | Nothing (it stays pinned, doesn't toggle off) |
+| Click the already-pinned hold **[P7]** | Nothing (it stays pinned, doesn't toggle off) |
 | Click empty scene (not a hold, not UI) | Closes pinned card (D7) |
 | Esc | Closes pinned card (D7) |
 | Tab / Shift+Tab | Moves focus through the interactive holds in order; focus = hover behavior |
@@ -409,7 +425,7 @@ All live in **`src/config/motion.ts`** so they can be tuned in one place.
 | Section → section | **0.35s** |
 | Section → island | **0.4s** |
 | Region hover lift / release | 0.15s |
-| Card preview in / out | 0.12s / 0.1s (+0.25s close delay) |
+| Card preview in / out | 0.12s / 0.1s (no close delay, D22) |
 | Climber pose change | 0.3s (0.4s for long moves) |
 | Reduced-motion crossfade (all route changes) | 0.15s |
 
@@ -438,7 +454,7 @@ Any pinned card closes at the start. The climber in the new section starts at th
 ### 9.4 Section → island
 
 Pull-back with blur (like 9.3 step 1), swap, and the island appears **already whole**, settling into
-place. **[PROPOSAL P8]** No reassembly animation, to keep it short. Pinned card closes at the start.
+place. **[P8]** No reassembly animation. Pinned card closes at the start.
 
 ### 9.5 Rules
 
@@ -466,13 +482,14 @@ place. **[PROPOSAL P8]** No reassembly animation, to keep it short. Pinned card 
 
 ### 11.1 Layout (desktop / landscape)
 
-- **Right column**, width `clamp(340px, 30vw, 440px)`, full height minus 24px margins (a long card).
-  Content scrolls inside the card if it's too tall.
+- **Right column**, width `clamp(340px, 30vw, 440px)`, starting **below the top bar** (§7.6) and
+  running to 24px above the bottom edge (a long card). Content scrolls inside the card if it's too tall.
 - Cream panel, ink border, offset shadow (§5). Header strip in the section's accent color.
 - Header: title, subtitle, dates, **X** close button (only shown when pinned; preview cards have no X).
+- **Preview cards are view-only** (D22): they ignore the pointer, show no X, and vanish when the cursor
+  leaves the hold. To scroll a card or use its links, click the hold to pin it.
 - Links open in a new tab.
-- **[PROPOSAL P9]** Clicking anywhere inside a **preview** card pins it (so users can click its links
-  without the card vanishing).
+- ~~[P9] Clicking inside a preview card pins it~~: dropped, since previews are view-only.
 
 ### 11.2 Content per item kind
 
@@ -498,8 +515,8 @@ One image per card max; no lightbox in v1.
 ## 12. Navigation (while in a section)
 
 The island itself is the navigation on `/`. In sections, **two variants are built** (D9), switchable via
-`?nav=rail` / `?nav=dock` **[PROPOSAL P10]** during the comparison. After you choose, the other variant
-and the switch are deleted.
+`?nav=rail` / `?nav=dock` **[P10]** during the comparison. After you choose, the other variant and the
+switch are deleted. Separately, the name in the top bar always links back to the island (D20).
 
 Both variants contain the same 5 buttons: **Island** (home) + the 4 sections in `order`. Each has an
 icon and label; the current section is highlighted and not clickable.
@@ -541,8 +558,8 @@ Tap a region or its label to **enter immediately**. No hover/lift state.
   drag handle, X). There is no preview state on touch.
 - **Tap another hold:** sheet content switches.
 - **Close:** X, swipe the sheet down, or tap empty scene.
-- **[PROPOSAL P11]** When the sheet opens, the camera shifts up (0.2s) so the active hold stays visible
-  above the sheet; it shifts back when the sheet closes.
+- **[P11]** When the sheet opens, the camera shifts up (0.2s) so the active hold and climber stay
+  visible above the sheet; it shifts back when the sheet closes.
 - Hold name tags stay visible, one size step smaller. Wall layouts are authored so tags don't overlap
   at portrait framing.
 - The nav dock is hidden while the sheet is open.
@@ -614,7 +631,7 @@ water movement (static frames), no climber idle, pose snaps, hold pulse replaced
 ### 15.3 Loading strategy
 
 - **Initial load:** app shell + island scene + fonts. Target **≤ 3 MB compressed**.
-- **Section scenes** are separate chunks (code + models). **[PROPOSAL P12]** After the island is
+- **Section scenes** are separate chunks (code + models). **[P12]** After the island is
   interactive, all four sections preload in the background while the browser is idle, so dives are
   instant. With Save-Data on, or on slow connections, a section preloads only when its region is
   hovered or tapped.
@@ -654,22 +671,22 @@ Generated at **build time** from `src/content/portfolio.ts` by one shared Markdo
 
 ---
 
-## 17. Proposals to confirm during review
+## 17. Proposal resolutions
 
-| ID | Proposal | Section |
-|---|---|---|
-| P1 | Direct load of `/section` skips the island, 0.3s fade-in | §3.1 |
-| P2 | Simple styled 404 page | §3.1 |
-| P3 | Font pairing: pick 1, 2 or 3 | §5 |
-| P4 | Labels: ink pill default → white pill on hover | §6.2 |
-| P5 | No rope on the glacier in v1 | §7.2 |
-| P6 | Small section title top-left in sections | §7.6 |
-| P7 | Clicking the pinned hold again does nothing | §8.4 |
-| P8 | Section → island: island appears whole, no reassembly | §9.4 |
-| P9 | Clicking inside a preview card pins it | §11.1 |
-| P10 | `?nav=rail` / `?nav=dock` switch during the nav comparison | §12 |
-| P11 | Mobile: camera shifts up when the bottom sheet opens | §13.3 |
-| P12 | Background preload of all sections after the island loads | §15.3 |
+| ID | Proposal | Resolution | Section |
+|---|---|---|---|
+| P1 | Direct load of `/section` skips the island, 0.3s fade-in | Approved | §3.1 |
+| P2 | Simple styled 404 page | Approved | §3.1 |
+| P3 | Font pairing | **Lilita One + Nunito** | §5 |
+| P4 | Labels: ink pill default → white pill on hover | Approved | §6.2 |
+| P5 | No rope on the glacier in v1 | Approved | §7.2 |
+| P6 | Section title top-left | **Replaced** by the top bar: name top-left, title top-middle (D20, D21) | §7.6 |
+| P7 | Clicking the pinned hold again does nothing | Approved | §8.4 |
+| P8 | Section → island: island appears whole, no reassembly | Approved | §9.4 |
+| P9 | Clicking inside a preview card pins it | **Dropped**: previews are view-only (D22) | §11.1 |
+| P10 | `?nav=rail` / `?nav=dock` switch during the nav comparison | Approved | §12 |
+| P11 | Mobile: camera shifts up when the bottom sheet opens | Approved | §13.3 |
+| P12 | Background preload of all sections after the island loads | Approved | §15.3 |
 
 ---
 
