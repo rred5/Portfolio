@@ -8,9 +8,12 @@ import { pick, rng, range, type Rng } from '../../lib/rng';
 import { smoothstep } from '../../lib/ease';
 import { box, cloud, cone, cylinder, flat, jitter, merge, paint, paintFaces, pine, place, rock, tree } from '../../render/geo';
 import { barn, farmhouse, fence, field, hayBale, silo, type Crop } from '../common/farm';
+import { barrel, fishCrate, fishingBoat, pier, stall } from '../common/harbor';
 import { boundaryWobble, islandRadius, REGIONS, type RegionDef } from './layout';
 
 const BOTTOM = -2.4;
+/** Angle of the fishing harbour's cove on the coast region. */
+const COVE_A = 0.26;
 const RADIAL = [0.06, 0.4, 0.72, 1.0];
 const ANG_SPLITS = 3;
 
@@ -37,8 +40,11 @@ function heightAt(env: EnvId, x: number, z: number, f: number): number {
       return 0.75 + 0.3 * fbm(x * 0.3, z * 0.3, 8) - 0.1 * smoothstep(0.9, 1, f);
     case 'gym':
       return 0.5 + 0.03 * fbm(x * 0.5, z * 0.5, 4);
-    case 'coast':
-      return 0.42 + 1.05 * smoothstep(0.42, 0.96, f) + 0.12 * fbm(x * 0.4, z * 0.4, 6);
+    case 'coast': {
+      // Cliffs rise toward the rim, except in the harbour cove where the land runs down to a beach.
+      const cove = Math.exp(-(((Math.atan2(z, x) - COVE_A) / 0.22) ** 2));
+      return 0.42 + 1.05 * smoothstep(0.42, 0.96, f) * (1 - cove) + 0.12 * fbm(x * 0.4, z * 0.4, 6) * (1 - cove * 0.7);
+    }
   }
 }
 
@@ -414,9 +420,38 @@ function coastDecor(def: RegionDef, r: Rng): Deco[] {
     out.push({ geometry: place(rock(r, range(r, 0.25, 0.4), '#9a5d44'), [Math.cos(a) * rr, 0.05, Math.sin(a) * rr]), a, f: 0.99 });
   }
   // Lighthouse on the cliff top: the contact beacon.
-  const lh = spotAt(def, mid - 0.22, 0.86);
+  const lh = spotAt(def, mid + 0.25, 0.86);
   out.push({ geometry: place(lighthouse(), [lh.x, lh.y - 0.05, lh.z]), a: lh.a, f: lh.f });
-  for (const s of scatter(def, r, 6, 0.15, 0.7, [lh], 1.1)) {
+
+  // The fishing market in the cove: a pier out to sea with boats moored alongside, stalls with
+  // striped awnings on the beach, crates of fish and barrels.
+  const rim = islandRadius(COVE_A);
+  out.push({ geometry: place(pier(3.0, 0.46, 0.32, 0.5), [Math.cos(COVE_A) * rim * 0.93, 0, Math.sin(COVE_A) * rim * 0.93], [0, -COVE_A, 0]), a: COVE_A, f: 0.99 });
+  for (const [d, side, color] of [
+    [1.3, 1, '#e8423c'],
+    [2.3, -1, '#3ee0c5'],
+  ] as const) {
+    const R = rim * 0.93 + d;
+    const px = Math.cos(COVE_A) * R - Math.sin(COVE_A) * 0.55 * side;
+    const pz = Math.sin(COVE_A) * R + Math.cos(COVE_A) * 0.55 * side;
+    out.push({ geometry: place(fishingBoat(color), [px, 0, pz], [0, -COVE_A + 0.1 * side, 0], 1.35), a: COVE_A, f: 0.99 });
+  }
+  const market: Spot[] = [];
+  for (const [da, f, stripe] of [
+    [-0.14, 0.8, '#e8423c'],
+    [0.14, 0.8, '#2f86c4'],
+  ] as const) {
+    const s = spotAt(def, COVE_A + da, f);
+    market.push(s);
+    out.push({ geometry: place(stall(stripe), [s.x, s.y, s.z], [0, -COVE_A - Math.PI / 2, 0], 0.78), a: s.a, f: s.f });
+  }
+  for (let k = 0; k < 4; k++) {
+    const s = spotAt(def, COVE_A + range(r, -0.08, 0.08), range(r, 0.88, 0.93));
+    market.push(s);
+    const g = k % 2 ? place(barrel(), [0, 0, 0], [0, 0, 0], 0.3) : place(fishCrate(r), [0, 0, 0], [0, r() * 3, 0], 0.28);
+    out.push({ geometry: place(g, [s.x, s.y, s.z]), a: s.a, f: s.f });
+  }
+  for (const s of scatter(def, r, 6, 0.15, 0.7, [lh, ...market], 1.1)) {
     out.push({ geometry: place(rock(r, range(r, 0.3, 0.45), '#4fae3f', 0, 0.18), [s.x, s.y + 0.18, s.z], [0, 0, 0], [1, 0.8, 1]), a: s.a, f: s.f });
   }
   for (const s of scatter(def, r, 3, 0.75, 0.9, [], 1.5)) {

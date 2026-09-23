@@ -25,6 +25,7 @@ import { noInk, outlineTargets, pickables, type Pickable } from '../../state/reg
 import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
 import { Particles } from '../common/ambient';
+import { fishingBoat } from '../common/harbor';
 import { buildBoat, buildClouds, buildHub, buildIsland } from './build';
 import { Gulls } from './Gulls';
 import { REGIONS } from './layout';
@@ -54,8 +55,9 @@ export function Island() {
   const regions = useMemo(buildIsland, []);
   const clouds = useMemo(buildClouds, []);
   const water = useMemo(islandWaterMaterial, []);
-  const scenery = useMemo(() => ({ hub: buildHub(), boat: buildBoat() }), []);
+  const scenery = useMemo(() => ({ hub: buildHub(), boat: buildBoat(), fisher: fishingBoat('#ffd23f') }), []);
   const boatRef = useRef<Group>(null);
+  const fisherRef = useRef<Group>(null);
   const root = useRef<Group>(null);
   const regionGroups = useRef<Partial<Record<SectionId, Group>>>({});
   const lifts = useRef<Record<string, number>>({});
@@ -181,6 +183,14 @@ export function Island() {
       boat.rotation.set(s.env.reduced ? 0 : Math.sin(time * 1.3) * 0.06, -(ba + Math.PI / 2), 0);
     }
 
+    // A fishing boat working its way round the other way, closer in.
+    const fisher = fisherRef.current;
+    if (fisher) {
+      const fa = 2.6 - (s.env.reduced ? 0 : time * 0.045);
+      fisher.position.set(Math.cos(fa) * 13.4, s.env.reduced ? 0 : Math.sin(time * 1.5 + 1) * 0.04, Math.sin(fa) * 13.4);
+      fisher.rotation.set(s.env.reduced ? 0 : Math.sin(time * 1.2) * 0.05, -(fa - Math.PI / 2), 0);
+    }
+
     for (let i = 0; i < clouds.length; i++) {
       const c = clouds[i]!;
       const ref = cloudRefs.current[i];
@@ -218,6 +228,9 @@ export function Island() {
       <mesh geometry={scenery.hub} material={toonVC()} castShadow receiveShadow />
       <group ref={boatRef}>
         <mesh geometry={scenery.boat} material={toonVC()} castShadow />
+      </group>
+      <group ref={fisherRef} scale={1.3}>
+        <mesh geometry={scenery.fisher} material={toonVC()} castShadow />
       </group>
       <Gulls />
       {/* Light snowfall over the glacier region. */}
