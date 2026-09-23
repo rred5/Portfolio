@@ -16,10 +16,9 @@ import {
 import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
-import { smoothstep } from '../../lib/ease';
 import { fbm } from '../../lib/noise';
 import { pick, rng, range, type Rng } from '../../lib/rng';
-import { flat, jitter, merge, paint, paintFaces, place } from '../../render/geo';
+import { box, flat, jitter, merge, paint, paintFaces, place } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
 import { shadowMap } from '../../render/shadows';
 import { toonVC } from '../../render/toon';
@@ -28,10 +27,9 @@ import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
 import { Particles } from '../common/ambient';
 import { wallLayout } from '../layouts';
-import { inWall } from '../wall/helpers';
 import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
-import { irregularRoll, reliefMesh } from '../wall/surface';
+import { cliffFace, edgeRoll, reliefMesh } from '../wall/surface';
 import { toWorld } from '../wall/types';
 import { glacierWall } from '../walls';
 
@@ -77,98 +75,127 @@ function buttress(r: Rng, at: [number, number, number], w: number, h: number, d:
   );
 }
 
+/** Valley floor level, far below the start ledge. */
+const VALLEY_Y = -70;
+/** The ice face's right-hand end (u), past which the view opens up. */
+const FACE_END = 4.4;
+
+/** Ground height of the valley, with the glacier's trough. */
+function valleyY(x: number, z: number) {
+  return VALLEY_Y + 10 * fbm(x * 0.006, z * 0.006, 61) + 0.05 * Math.abs(x - glacierX(z));
+}
+
+/** Centre line of the glacier as it winds down the valley toward the viewer. */
+const glacierX = (z: number) => 45 + (z + 80) * 0.28 + 20 * Math.sin(z * 0.012);
+
+function rockOrSnow(y: number, n: Vector3, c: Vector3) {
+  if (n.y > 0.5) return '#f4f8ff';
+  return fbm(c.x * 0.2 + c.z * 0.2, y * 0.2, 35) > 0.1 ? '#5f6480' : '#6b7089';
+}
+
 function buildScene() {
   const def = glacierWall;
   const r = rng(515);
   const up = new Vector3(0, 1, 0);
-  const face = reliefMesh(def, {
-    u0: -5.4,
-    u1: 5.4,
-    v0: -0.3,
-    vTop: (u) => 7.3 + 0.9 * Math.sin(u * 0.9 + 1) + 0.6 * fbm(u * 1.5, 3, 12) - 3.2 * Math.pow(Math.abs(u) / 5.4, 2),
-    nu: 56,
-    nv: 46,
-    roll: irregularRoll({ half: 5.4, band: 1.9, depth: 2.6, amp: 0.9, seed: 13, top: [1.2, 1.4] }),
-    color: (u, v, n) => {
-      if (n.dot(up) > 0.55) return '#f4f8ff';
-      // Rock shows through only towards the sides, where the ice meets the buttresses.
-      if (Math.abs(u) > 3.6 && fbm(u * 0.45 + 5, v * 0.45, 31) > 0.25 - (Math.abs(u) - 3.6) * 0.3) return fbm(u, v, 32) > 0 ? '#5a5f7a' : '#6b7089';
-      const band = fbm(u * 1.3, v * 0.14, 33) + 0.25 * fbm(u * 3, v * 3, 34);
-      return ICE[Math.floor((band + 1) * 2.5) % ICE.length]!;
-    },
-  });
-  const parts: BufferGeometry[] = [face];
+  const parts: BufferGeometry[] = [];
 
-  // Snow-loaded ledges and icicle curtains beneath them (wall space).
-  const ledges: [number, number, number][] = [
-    [-1.6, 3.05, 1.3],
-    [1.7, 4.75, 1.7],
-  ];
-  for (const [u, v, w] of ledges) {
-    const d = def.surface(u, v);
-    const g = new IcosahedronGeometry(1, 1);
-    jitter(g, 0.08, r);
-    parts.push(inWall(def, place(paint(flat(g), '#f4f8ff'), [u, v, d - 0.1], [0, 0, 0], [w / 2, 0.11, 0.27])));
-    for (let k = 0; k < 7; k++) {
-      const iu = u + range(r, -w / 2.4, w / 2.4);
-      const len = range(r, 0.15, 0.4);
-      parts.push(inWall(def, place(paint(flat(new ConeGeometry(0.035, len, 4)), '#bfefff'), [iu, v - 0.08 - len / 2, def.surface(iu, v) + 0.06], [Math.PI, 0, 0])));
-    }
-  }
+  // The ice face: a frozen flow down the mountain, rising far above the route. Rock shows through
+  // toward its sides; snow sits on every ledge.
+  parts.push(
+    reliefMesh(def, {
+      u0: -14,
+      u1: FACE_END + 0.2,
+      v0: -0.3,
+      vTop: (u) => 15 + 0.8 * Math.sin(u * 0.7) + 0.6 * fbm(u * 1.2, 3, 12),
+      nu: 96,
+      nv: 84,
+      roll: edgeRoll({ right: [FACE_END - 1.2, FACE_END + 0.2, 2.0] }),
+      color: (u, v, n) => {
+        if (n.dot(up) > 0.55) return '#f4f8ff';
+        const edge = Math.max(-4.2 - u, u - (FACE_END - 0.7));
+        if (edge > 0 && fbm(u * 0.45 + 5, v * 0.45, 31) > 0.35 - edge * 0.5) return fbm(u, v, 32) > 0 ? '#7c8199' : '#8a8fa8';
+        const band = fbm(u * 1.3, v * 0.14, 33) + 0.25 * fbm(u * 3, v * 3, 34);
+        return ICE[Math.floor((band + 1) * 2.5) % ICE.length]!;
+      },
+    }),
+  );
 
-  // Mountain mass behind the face, set back so its snowy summit shows above.
-  parts.push(place(jaggedPeak(r, 7, 16, 0.5), [1.5, 5, -9]));
-
-  // Rock buttresses either side, so the ice reads as a frozen flow down a gully in the mountain
-  // rather than a slab standing on the snow.
+  // The mountain ends in a rock prow past the ice, running away back-left; its side faces away
+  // from the camera, so the right of the frame is open valley.
+  parts.push(cliffFace([FACE_END - 0.2, -1.8], [-22, -50], VALLEY_Y, 15, { segs: 40, rows: 40, rough: 1.2, seed: 71, color: rockOrSnow }));
+  // Left buttresses (off to the side of the route).
   parts.push(buttress(r, [-5.5, 0, -0.1], 2.3, 7.8, 2.4, 0.25));
-  parts.push(buttress(r, [5.3, 0, 0.1], 2.1, 6.6, 2.2, -0.3));
   parts.push(buttress(r, [-7.8, 0, -1.6], 2.2, 9.5, 2.4, 0.6));
-  parts.push(buttress(r, [7.6, 0, -1.2], 2.4, 8.4, 2.4, -0.5));
-  // Drifted snow along the foot of the ice: low in the middle where the climber stands, deeper
-  // against the rock.
+
+  // The start ledge: a snow shelf, drifts deeper toward the rock, then the drop below.
+  const shelf = new PlaneGeometry(20, 2.6, 36, 5);
+  shelf.rotateX(-Math.PI / 2);
+  const sp = shelf.getAttribute('position');
+  for (let i = 0; i < sp.count; i++) {
+    const x = sp.getX(i) + (FACE_END - 9.8);
+    const z = sp.getZ(i) + 1.2;
+    sp.setXYZ(i, x, 0.05 * fbm(x * 1.5, z * 1.5, 62) - Math.max(0, z - 2.0) * 0.4, z);
+  }
+  parts.push(paintFaces(flat(shelf), (c) => (fbm(c.x * 0.5, c.z * 0.5, 62) > 0.2 ? '#e6eefb' : '#f7faff')));
   for (const [x, z, w, h] of [
     [0, 0.3, 3.2, 0.14],
     [-2.9, 0.45, 1.8, 0.32],
     [2.8, 0.5, 1.7, 0.3],
     [-4.4, 0.7, 1.6, 0.55],
-    [4.3, 0.75, 1.5, 0.5],
   ] as const) {
     const g = new IcosahedronGeometry(1, 2);
     jitter(g, 0.05, r);
     parts.push(place(paintFaces(flat(g), (_c, n) => (n.y > 0.4 ? '#f7faff' : '#e1eafa')), [x, 0, z], [0, 0, 0], [w, h, 0.75]));
   }
+  parts.push(cliffFace([-14, 2.45], [FACE_END + 0.4, 2.45], VALLEY_Y, 0.02, { segs: 50, rows: 40, rough: 1.0, seed: 72, color: rockOrSnow }));
+  parts.push(cliffFace([FACE_END + 0.4, 2.45], [FACE_END - 0.2, -1.8], VALLEY_Y, 0.02, { segs: 8, rows: 40, rough: 0.6, seed: 73, color: rockOrSnow }));
 
-  // Snow slope at the base, dropping away at the sides and front.
-  const snowG = new PlaneGeometry(40, 30, 40, 30);
-  snowG.rotateX(-Math.PI / 2);
-  const sp = snowG.getAttribute('position');
-  for (let i = 0; i < sp.count; i++) {
-    const x = sp.getX(i);
-    const z = sp.getZ(i) + 6;
-    sp.setZ(i, z);
-    const drop = smoothstep(5, 11, Math.abs(x)) * 16 + smoothstep(9, 14, z) * 16;
-    sp.setY(i, -0.05 + fbm(x * 0.4, z * 0.4, 61) * 0.18 - drop - Math.max(0, z) * 0.06);
+  // Valley floor, the glacier winding down it, its crevasses and moraines.
+  const floor = new PlaneGeometry(900, 900, 60, 60);
+  floor.rotateX(-Math.PI / 2);
+  const fp = floor.getAttribute('position');
+  for (let i = 0; i < fp.count; i++) fp.setY(i, valleyY(fp.getX(i), fp.getZ(i)));
+  parts.push(paintFaces(flat(floor), (c) => (fbm(c.x * 0.02, c.z * 0.02, 64) > 0.15 ? '#dfe7f5' : '#c9d3e6')));
+  const ribbon = (offset: number, width: number, color: string, lift: number) => {
+    const pos: number[] = [];
+    for (let z = -40; z > -560; z -= 12) {
+      const z2 = z - 12;
+      const x1 = glacierX(z) + offset;
+      const x2 = glacierX(z2) + offset;
+      const y1 = valleyY(x1, z) + lift;
+      const y2 = valleyY(x2, z2) + lift;
+      pos.push(x1 - width, y1, z, x1 + width, y1, z, x2 + width, y2, z2, x1 - width, y1, z, x2 + width, y2, z2, x2 - width, y2, z2);
+    }
+    const g = new BufferGeometry();
+    g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+    g.computeVertexNormals();
+    return paint(g, color);
+  };
+  parts.push(ribbon(0, 26, '#a8dcf5', 0.6));
+  parts.push(ribbon(-27, 3, '#6b6f82', 0.7));
+  parts.push(ribbon(27, 3, '#6b6f82', 0.7));
+  parts.push(ribbon(6, 1.2, '#7c8199', 0.8));
+  for (let k = 0; k < 40; k++) {
+    const z = range(r, -460, -50);
+    const x = glacierX(z) + range(r, -18, 18);
+    parts.push(place(box(range(r, 6, 12), 0.2, 0.9, '#5aa8e0'), [x, valleyY(x, z) + 0.9, z], [0, range(r, -0.3, 0.3), 0]));
   }
-  parts.push(paintFaces(flat(snowG), (c) => (fbm(c.x * 0.5, c.z * 0.5, 62) > 0.2 ? '#e6eefb' : '#f7faff')));
 
-  // Distant peaks, fogged lavender.
-  for (let i = 0; i < 16; i++) {
-    const a = range(r, -Math.PI * 0.95, -Math.PI * 0.05);
-    const dist = range(r, 45, 130);
-    const h = range(r, 18, 46);
-    parts.push(place(jaggedPeak(r, h * range(r, 0.45, 0.65), h, 0.55), [Math.cos(a) * dist, -22 + h / 2, Math.sin(a) * dist]));
+  // Ranges either side of the valley, and a far wall of peaks, fading into the haze.
+  for (let i = 0; i < 12; i++) {
+    const z = range(r, -540, -230);
+    const h = range(r, 70, 150);
+    parts.push(place(jaggedPeak(r, h * range(r, 0.4, 0.55), h, 0.55), [glacierX(z) - range(r, 55, 115), VALLEY_Y + h / 2 - 5, z]));
   }
-  for (let i = 0; i < 6; i++) {
-    const x = (i % 2 ? 1 : -1) * range(r, 22, 45);
-    const h = range(r, 14, 26);
-    parts.push(place(jaggedPeak(r, h * 0.55, h, 0.5), [x, -30 + h / 2, range(r, -10, 25)]));
+  for (let i = 0; i < 12; i++) {
+    const z = range(r, -540, -270);
+    const h = range(r, 70, 150);
+    parts.push(place(jaggedPeak(r, h * range(r, 0.4, 0.55), h, 0.55), [glacierX(z) + range(r, 55, 120), VALLEY_Y + h / 2 - 5, z]));
   }
-  // Glacier tongue far below.
-  const tongue = new PlaneGeometry(420, 420, 24, 24);
-  tongue.rotateX(-Math.PI / 2);
-  jitter(tongue, 0.6, r);
-  parts.push(place(paintFaces(flat(tongue), (c) => (fbm(c.x * 0.03, c.z * 0.03, 71) > 0.1 ? '#dfe9f7' : '#b9d4ef')), [0, -38, 0]));
+  for (let i = 0; i < 9; i++) {
+    const h = range(r, 140, 230);
+    parts.push(place(jaggedPeak(r, h * 0.5, h, 0.5), [range(r, -200, 300), VALLEY_Y + h / 2 - 10, range(r, -620, -540)]));
+  }
   return merge(parts);
 }
 
@@ -220,7 +247,7 @@ export default function GlacierScene({ onReady }: SectionSceneProps) {
   const layout = wallLayout('experience');
   const world = useMemo(buildScene, []);
   useEffect(() => {
-    const off = registerAtmosphere('experience', { fog: new Fog('#e6e0ff', 25, 150), background: '#e6e0ff' });
+    const off = registerAtmosphere('experience', { fog: new Fog('#e6e0ff', 70, 680), background: '#e6e0ff' });
     onReady();
     return off;
   }, [onReady]);
@@ -229,7 +256,7 @@ export default function GlacierScene({ onReady }: SectionSceneProps) {
     <group>
       <hemisphereLight args={['#c9d8ff', '#8a7fb0', 1.25]} />
       <directionalLight
-        position={[-9, 6, 7]}
+        position={[9, 8, 7]}
         intensity={2.5}
         color="#fff1e0"
         castShadow
@@ -243,7 +270,7 @@ export default function GlacierScene({ onReady }: SectionSceneProps) {
         shadow-bias={-0.001}
         shadow-normalBias={0.04}
       />
-      <SkyDome top="#7d95e0" horizon="#e6e0ff" bottom="#d8d0f5" />
+      <SkyDome top="#7d95e0" horizon="#e6e0ff" bottom="#d8d0f5" radius={680} />
       <mesh geometry={world} material={toonVC()} receiveShadow castShadow />
       <Particles section="experience" count={260} box={SNOW_BOX} size={0.07} color="#ffffff" opacity={0.85} fall={0.5} drift={0.12} seed={17} />
       <Spindrift />

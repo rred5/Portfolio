@@ -99,8 +99,8 @@ export const glacierWall: WallDef = {
   pelvisMin: 0.92,
   handOffsetV: -0.42,
   framing: {
-    landscape: { u: 0, v: 2.4, d: 0.4, yaw: 14, pitch: 8, fitW: 6.2, fitH: 5.6, fov: 38 },
-    portrait: { u: 0, v: 2.9, d: 0.4, yaw: 9, pitch: 8, fitW: 4.4, fitH: 4.8, fov: 40 },
+    landscape: { u: 1.8, v: 2.6, d: 0.4, yaw: 36, pitch: 11, fitW: 6.4, fitH: 5.2, fov: 38 },
+    portrait: { u: 1.0, v: 2.9, d: 0.4, yaw: 30, pitch: 10, fitW: 4.7, fitH: 5.0, fov: 40 },
   },
 };
 
