@@ -26,37 +26,16 @@ import { clamp01, easeInOutCubic, lerp } from '../lib/ease';
 import { solveTwoBone } from '../lib/ik';
 import { box, flat, merge, paint, place } from '../render/geo';
 import { toon, toonVC } from '../render/toon';
-import type { SectionId } from '../content/types';
 import type { WallLayout } from '../scenes/layouts';
-import { BODY, type Pose, type Side, type Spot } from '../scenes/wall/route';
+import { BODY, type Side } from '../scenes/wall/route';
 import { coverDepth, toWorld } from '../scenes/wall/types';
 import { noInk } from '../state/registry';
 import { getState } from '../state/store';
+import { copyPose, emptyFrame, evalStep, latchAt, planSteps, type Flavor, type Limb, type Step } from './moves';
 import type { Outfit } from './outfits';
 
 // Depths out from the wall surface.
 const D = { pelvis: 0.36, chest: 0.3, head: 0.33, hand: 0.07, foot: 0.08 };
-
-type Limb = 'lh' | 'rh' | 'lf' | 'rf';
-const LIMBS: Limb[] = ['lh', 'rh', 'lf', 'rf'];
-
-interface PoseState {
-  pelvis: Spot;
-  lean: number;
-  lh: Spot;
-  rh: Spot;
-  lf: Spot;
-  rf: Spot;
-}
-
-const copyPose = (p: Pose | PoseState): PoseState => ({
-  pelvis: { ...p.pelvis },
-  lean: p.lean,
-  lh: { ...p.lh },
-  rh: { ...p.rh },
-  lf: { ...p.lf },
-  rf: { ...p.rf },
-});
 
 // Body parts are smooth-shaded (unlike the faceted scenery) so the ink pass only draws silhouettes
 // and creases, not stripes along every facet of a thin limb.
@@ -325,25 +304,27 @@ function puff(list: Chip[], at: Vector3, normal: Vector3, n: number) {
 /** Glance over the shoulder: ease in, hold, ease out (seconds). */
 const GLANCE = { delay: 0.2, in: 0.25, hold: 0.9, out: 0.35, turn: (130 * Math.PI) / 180 };
 
-/** Where the rope ties in, per section, updated every frame the climber is shown (read by Rope). */
-export const harnessPos: Partial<Record<SectionId, Vector3>> = {};
-
 export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit }) {
   const { def, route } = layout;
   const rig = useMemo(() => buildRig(outfit), [outfit]);
+  const flavor: Flavor = def.section === 'projects' ? 'overhang' : def.section === 'experience' ? 'ice' : 'rock';
   const anim = useRef({
-    cur: copyPose(route.rest),
-    from: copyPose(route.rest),
-    to: copyPose(route.rest),
+    /** Pose at the start of the current step, and the pose being shown. */
+    base: copyPose(route.rest),
+    frame: emptyFrame(route.rest),
+    step: null as Step | null,
+    queue: [] as Step[],
+    /** Pose index the climber is on (−1 = rest), once the current step finishes. */
+    index: -1,
+    latched: true,
+    /** Hand that made the last reach (for the head, the axe snap and the chalk hand). */
     reach: null as Side | null,
     t0: -1,
-    dur: motion.pose as number,
     targetId: undefined as string | undefined,
     idleSince: 0,
     nextChalk: 7,
     chalk: -1,
     chalkHand: 'L' as Side,
-    landed: true,
     tick: 0,
     chips: [] as Chip[],
     glance: -10,
@@ -383,10 +364,13 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     if (s.shown !== def.section) {
       // Reset to the rest pose whenever the section isn't on screen (spec §9.3).
       const a = anim.current;
-      if (a.targetId !== undefined || a.t0 !== -1) {
-        a.cur = copyPose(route.rest);
-        a.from = copyPose(route.rest);
-        a.to = copyPose(route.rest);
+      if (a.targetId !== undefined || a.index !== -1 || a.step) {
+        a.base = copyPose(route.rest);
+        a.frame = emptyFrame(route.rest);
+        a.step = null;
+        a.queue = [];
+        a.index = -1;
+        a.latched = true;
         a.targetId = undefined;
         a.reach = null;
         a.t0 = -1;
@@ -400,65 +384,66 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     const now = state.clock.elapsedTime;
     const reduced = s.env.reduced;
 
-    // New target?
+    // New target: plan the moves there, one hold at a time. A step already under way finishes
+    // first (so hands never jump off a hold mid-move), except under reduced motion.
     const targetId = s.climberItem[def.section];
     if (targetId !== a.targetId) {
       a.targetId = targetId;
-      const idx = targetId ? layout.slotOf.get(targetId) : undefined;
-      const pose = idx !== undefined ? route.poses[idx]! : route.rest;
-      a.from = copyPose(a.cur);
-      a.to = copyPose(pose);
-      a.reach = pose.reach;
-      const travel = Math.hypot(pose.pelvis.u - a.cur.pelvis.u, pose.pelvis.v - a.cur.pelvis.v);
-      a.dur = reduced ? motion.poseReduced : travel > motion.longMove ? motion.poseLong : motion.pose;
-      a.t0 = now;
-      a.idleSince = now + a.dur;
+      const target = targetId ? (layout.slotOf.get(targetId) ?? -1) : -1;
+      if (reduced && a.step) {
+        a.base = copyPose(a.frame.pose);
+        a.step = null;
+      }
+      const from = a.step ? a.step.index : a.index;
+      a.queue = planSteps(route, from, target, { move: motion.move, through: motion.moveThrough, reduced: motion.poseReduced }, reduced);
       a.chalk = -1;
-      a.landed = false;
+    }
+    if (!a.step && a.queue.length) {
+      a.step = a.queue.shift()!;
+      a.base = copyPose(a.frame.pose);
+      a.t0 = now;
+      a.latched = false;
+      a.reach = a.step.reach;
     }
 
-    // Blend.
-    const t = a.t0 < 0 ? 1 : clamp01((now - a.t0) / a.dur);
-    const e = easeInOutCubic(t);
-    a.cur.pelvis.u = lerp(a.from.pelvis.u, a.to.pelvis.u, e);
-    a.cur.pelvis.v = lerp(a.from.pelvis.v, a.to.pelvis.v, e);
-    a.cur.lean = lerp(a.from.lean, a.to.lean, e);
-    const limbT: Record<Limb, number> = { lh: 0, rh: 0, lf: 0, rf: 0 };
-    LIMBS.forEach((limb, i) => {
-      const isReach = (limb === 'lh' && a.reach === 'L') || (limb === 'rh' && a.reach === 'R');
-      const delay = isReach ? 0.1 : (i * 0.025) / Math.max(a.dur, 0.01);
-      const lt = easeInOutCubic(clamp01((t - delay) / (1 - delay)));
-      limbT[limb] = lt;
-      a.cur[limb].u = lerp(a.from[limb].u, a.to[limb].u, lt);
-      a.cur[limb].v = lerp(a.from[limb].v, a.to[limb].v, lt);
-    });
-
-    // The reaching hand lands: axe "tick" and ice chips on the glacier, a chalk puff elsewhere; a
-    // pinned hold also gets a glance back over the shoulder.
-    if (!a.landed && t >= 1) {
-      a.landed = true;
-      if (a.reach && !reduced) {
-        const hold = a.reach === 'L' ? a.cur.lh : a.cur.rh;
-        const p = toWorld(def, hold.u, hold.v, 0.05 + coverDepth(def, hold.u, hold.v));
-        if (rig.axes) {
-          a.tick = now;
-          for (let i = 0; i < 7; i++) {
-            a.chips.push({
-              p: p.clone(),
-              v: new Vector3().copy(def.normal).multiplyScalar(0.6 + Math.random() * 0.6).add(tmp2.set((Math.random() - 0.5) * 1.2, Math.random() * 0.8, 0)),
-              age: 0,
-              life: 0.4,
-            });
+    const step = a.step;
+    const t = step ? clamp01((now - a.t0) / step.dur) : 1;
+    if (step) {
+      evalStep(a.base, step, t, flavor, a.frame);
+      // The hand grabs its hold: axe "tick" and ice chips on the glacier, a chalk puff elsewhere; the
+      // hold the user pinned also gets a glance back over the shoulder.
+      if (!a.latched && t >= latchAt(a.base, step)) {
+        a.latched = true;
+        const hand = step.reach === 'L' ? step.to.lh : step.to.rh;
+        if (step.reach && !reduced && step.index >= 0) {
+          const p = toWorld(def, hand.u, hand.v, 0.05 + coverDepth(def, hand.u, hand.v));
+          if (rig.axes) {
+            a.tick = now;
+            for (let i = 0; i < 7; i++) {
+              a.chips.push({
+                p: p.clone(),
+                v: new Vector3().copy(def.normal).multiplyScalar(0.6 + Math.random() * 0.6).add(tmp2.set((Math.random() - 0.5) * 1.2, Math.random() * 0.8, 0)),
+                age: 0,
+                life: 0.4,
+              });
+            }
+          } else {
+            puff(a.chips, p, def.normal, 6);
           }
-        } else {
-          puff(a.chips, p, def.normal, 7);
+          if (step.final && s.pinnedItem && s.pinnedItem === a.targetId) a.glance = now + GLANCE.delay;
         }
-        if (s.pinnedItem && s.pinnedItem === a.targetId) a.glance = now + GLANCE.delay;
+      }
+      if (t >= 1) {
+        a.index = step.index;
+        a.frame = emptyFrame(step.to);
+        a.step = null;
+        a.idleSince = now;
       }
     }
+    const idle = !a.step && !a.queue.length;
 
     // Idle: occasional chalk dip with the non-reaching hand (not on the glacier).
-    if (rig.chalk && !reduced && t >= 1) {
+    if (rig.chalk && !reduced && idle) {
       if (a.chalk < 0 && now - a.idleSince > motion.chalkIdleDelay && now > a.nextChalk) {
         a.chalk = now;
         a.puffed = false;
@@ -483,7 +468,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     }
 
     // --- Solve joints ---------------------------------------------------------------------------
-    const cur = a.cur;
+    const cur = a.frame.pose;
     const breathe = reduced ? 0 : Math.sin(now * 2.1) * 0.006;
     const lean = cur.lean;
     const ul = Math.hypot(lean, 1);
@@ -493,7 +478,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     const rtV = -upU;
     const P = cur.pelvis;
     const C = { u: P.u + upU * BODY.torso, v: P.v + upV * BODY.torso };
-    toWorld(def, P.u, P.v, D.pelvis, J.pelvis);
+    toWorld(def, P.u, P.v, D.pelvis + a.frame.hipIn, J.pelvis);
     toWorld(def, C.u, C.v, D.chest + breathe, J.chest);
     toWorld(def, C.u + upU * (BODY.neck + BODY.headR * 0.95), C.v + upV * (BODY.neck + BODY.headR * 0.95), D.head, J.head);
     for (const sd of ['L', 'R'] as const) {
@@ -514,15 +499,12 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     const bulk = puffy ? 1.2 : 1;
     // Chalk bag hangs off the back of the harness belt.
     J.bag.copy(J.pelvis).addScaledVector(yb, 0.02).addScaledVector(zb, 0.2);
-    // Rope tie-in at the front of the harness (between the climber and the wall).
-    (harnessPos[def.section] ??= new Vector3()).copy(J.pelvis).addScaledVector(yb, 0.06).addScaledVector(zb, -0.13);
 
     for (const sd of ['L', 'R'] as const) {
       const limb: Limb = sd === 'L' ? 'lh' : 'rh';
       const sg = sd === 'L' ? -1 : 1;
       const spot = cur[limb];
-      const isReach = a.reach === sd;
-      const arc = isReach && t < 1 && !reduced ? Math.sin(Math.PI * limbT[limb]) * 0.16 : 0;
+      const arc = reduced ? 0 : a.frame.arc[limb];
       const cover = coverDepth(def, spot.u, spot.v);
       toWorld(def, spot.u, spot.v, 0.03 + cover, J.hold[sd]);
       toWorld(def, spot.u, spot.v + def.handOffsetV, D.hand + arc + cover, J.ha[sd]);
@@ -534,7 +516,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       solveTwoBone(J.sh[sd], J.ha[sd], BODY.upperArm, BODY.forearm, J.pole, J.el[sd], J.ha[sd]);
 
       const fl: Limb = sd === 'L' ? 'lf' : 'rf';
-      toWorld(def, cur[fl].u, cur[fl].v, D.foot + coverDepth(def, cur[fl].u, cur[fl].v), J.ft[sd]);
+      toWorld(def, cur[fl].u, cur[fl].v, D.foot + (reduced ? 0 : a.frame.arc[fl]) + coverDepth(def, cur[fl].u, cur[fl].v), J.ft[sd]);
       J.pole.copy(J.hip[sd]).addScaledVector(def.right, sg * 0.9).addScaledVector(def.normal, 0.6).addScaledVector(def.up, 0.2);
       solveTwoBone(J.hip[sd], J.ft[sd], BODY.thigh, BODY.shin, J.pole, J.kn[sd], J.ft[sd]);
     }

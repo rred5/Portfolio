@@ -18,11 +18,12 @@ export const motion = {
   previewOut: 0.1,
   pinnedIn: 0.12,
 
-  pose: 0.3,
-  poseLong: 0.4,
+  /** One climbing move to the hovered / pinned hold: feet, drive, reach, latch, other hand. */
+  move: 1.2,
+  /** Each move through the holds in between, on the way to a hold further up or down. */
+  moveThrough: 0.85,
+  /** Reduced motion: straight to the target pose. */
   poseReduced: 0.08,
-  /** Pelvis travel (m) above which a pose change counts as a long move. */
-  longMove: 0.9,
 
   reducedFade: 0.15,
   directEnter: 0.3,

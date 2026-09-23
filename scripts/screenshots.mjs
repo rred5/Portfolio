@@ -52,7 +52,25 @@ for (const step of steps) {
   else if (step.focusSel) await page.locator(step.focusSel).first().focus();
   else if (step.key) await page.keyboard.press(step.key);
   else if (step.eval) logs.push(`eval: ${JSON.stringify(await page.evaluate(step.eval))}`);
-  else if (step.shot) {
+  else if (step.burst) {
+    // { "burst": { "name": "x", "count": 8, "every": 150, "clip": [x, y, w, h], "cols": 4 } }:
+    // frames of an animation, tiled into one numbered contact sheet.
+    const { name, count, every, clip, cols = 4 } = step.burst;
+    const frames = [];
+    for (let i = 0; i < count; i++) {
+      const buf = await page.screenshot({ clip: { x: clip[0], y: clip[1], width: clip[2], height: clip[3] } });
+      frames.push(buf.toString('base64'));
+      await page.waitForTimeout(every);
+    }
+    const sheet = await context.newPage();
+    await sheet.setViewportSize({ width: clip[2] * cols, height: clip[3] * Math.ceil(count / cols) });
+    const tiles = frames
+      .map((f, i) => `<div style="position:relative"><img src="data:image/png;base64,${f}" style="display:block;width:${clip[2]}px"><b style="position:absolute;left:4px;top:2px;font:bold 14px sans-serif;color:#fff;background:#000a;padding:0 4px">${i}</b></div>`)
+      .join('');
+    await sheet.setContent(`<body style="margin:0;display:grid;grid-template-columns:repeat(${cols},${clip[2]}px)">${tiles}</body>`);
+    await sheet.screenshot({ path: path.join(outDir, `${name}.png`) });
+    await sheet.close();
+  } else if (step.shot) {
     const clip = step.clip ? { x: step.clip[0], y: step.clip[1], width: step.clip[2], height: step.clip[3] } : undefined;
     await page.screenshot({ path: path.join(outDir, `${step.shot}.png`), clip });
   }

@@ -14,11 +14,17 @@ export interface WallDef {
   /** Relief of the wall surface along the normal, in metres. */
   surface: (u: number, v: number) => number;
   route: {
-    /** Holds alternate left/right up to this far from the centre line. */
+    /** Holds alternate left/right up to this far from the climbing line. */
     uSpread: number;
     vStart: number;
     vEnd: number;
     seed: number;
+    /** Straight up (default), or up one side then across the top to the finish. */
+    shape?: 'zigzag' | 'up-traverse';
+    /** Climbing line u at the bottom and top of the vertical part (default [0, 0]). */
+    lane?: [number, number];
+    /** u of the finishing hold for 'up-traverse'. */
+    traverseTo?: number;
   };
   /** Lowest v a foot can stand on without a hold (floor, ledge, snow). */
   ground: number;

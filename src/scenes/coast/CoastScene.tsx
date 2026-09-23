@@ -16,7 +16,6 @@ import {
 import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
-import { Rope, type RopeStyle } from '../../climber/Rope';
 import { fbm } from '../../lib/noise';
 import { pick, rng, range } from '../../lib/rng';
 import { flat, jitter, merge, paintFaces, place, rock } from '../../render/geo';
@@ -167,8 +166,6 @@ function waveY(x: number, z: number, t: number) {
   return 0.13 * Math.sin(x * 0.55 + t * 1.1) + 0.09 * Math.sin(z * 0.8 - t * 0.9 + x * 0.2) + 0.05 * Math.sin((x + z) * 1.3 + t * 1.7);
 }
 
-const ROPE: RopeStyle = { color: '#3ee0c5', protection: 'bolt', levels: [1.4, 2.45, 3.45], pile: [-0.8, -0.02, 0.62] };
-
 export default function CoastScene({ onReady }: SectionSceneProps) {
   const layout = wallLayout('about');
   const world = useMemo(buildScene, []);
@@ -261,7 +258,6 @@ export default function CoastScene({ onReady }: SectionSceneProps) {
       />
       <Holds layout={layout} style={style} />
       <Climber layout={layout} outfit={OUTFITS.coast} />
-      <Rope layout={layout} style={ROPE} />
     </group>
   );
 }

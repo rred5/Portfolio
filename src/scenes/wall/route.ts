@@ -2,6 +2,7 @@
 // item order. Each gets a predefined pose: which hand grabs it, where the other hand and feet go, and
 // where the pelvis sits. Support holds are created wherever those other limbs land, so the climber
 // always has something to stand and pull on.
+import { lerp } from '../../lib/ease';
 import { rng } from '../../lib/rng';
 import type { WallDef } from './types';
 
@@ -57,13 +58,26 @@ export function buildRoute(n: number, def: WallDef): Route {
   const r = rng(def.route.seed * 97 + n);
   const { uSpread, vStart, vEnd } = def.route;
 
+  const [lane0, lane1] = def.route.lane ?? [0, 0];
   const slots: Slot[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = n === 1 ? 0 : i / (n - 1);
+  // Up the wall: holds alternate either side of a climbing line (which may drift sideways), each
+  // taken by the hand on its side, so the climber goes hand over hand.
+  const traverse = def.route.shape === 'up-traverse' ? (n >= 5 ? 2 : 1) : 0;
+  const vertical = n - traverse;
+  const vTop = traverse ? vEnd - 0.2 : vEnd;
+  for (let i = 0; i < vertical; i++) {
+    const t = vertical === 1 ? 0 : i / (vertical - 1);
     const side = i % 2 === 0 ? -1 : 1;
-    const u = side * uSpread * (0.4 + 0.6 * r());
-    const v = vStart + t * (vEnd - vStart) + (r() - 0.5) * 0.12;
-    slots.push({ u, v, hand: u >= 0 ? 'R' : 'L' });
+    const u = lerp(lane0, lane1, t) + side * uSpread * (0.55 + 0.45 * r());
+    const v = vStart + t * (vTop - vStart) + (r() - 0.5) * 0.1;
+    slots.push({ u, v, hand: side > 0 ? 'R' : 'L' });
+  }
+  // Then across the top to the finish (Kilter-style), leading with the right hand.
+  const last = slots[slots.length - 1]!;
+  const traverseTo = def.route.traverseTo ?? 0.8;
+  for (let j = 0; j < traverse; j++) {
+    const k = (j + 1) / traverse;
+    slots.push({ u: lerp(last.u + 0.2, traverseTo, k), v: Math.max(last.v, vTop) + 0.07 * (j + 1) + (r() - 0.5) * 0.04, hand: 'R' });
   }
 
   const off = def.handOffsetV;
