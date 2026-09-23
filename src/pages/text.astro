@@ -1,0 +1,62 @@
+---
+// Human-readable text version (spec §16): the same Markdown as /llms-full.txt, rendered to HTML.
+import '@fontsource/lilita-one/400.css';
+import '@fontsource/nunito/400.css';
+import '@fontsource/nunito/700.css';
+import '@fontsource/nunito/800.css';
+import '../styles/tokens.css';
+import '../styles/text.css';
+import { Marked } from 'marked';
+import { portfolio, profile } from '../content/portfolio';
+import { assertValidContent } from '../content/validate';
+import { fullMarkdown, sectionIdForHeading } from '../lib/text/markdown';
+
+assertValidContent(portfolio);
+
+const marked = new Marked({
+  renderer: {
+    heading({ tokens, depth }) {
+      const text = this.parser.parseInline(tokens);
+      const raw = tokens.map((t) => t.raw).join('');
+      const id = depth === 2 ? sectionIdForHeading(portfolio, raw) : undefined;
+      return `<h${depth}${id ? ` id="${id}"` : ''}>${text}</h${depth}>\n`;
+    },
+    link({ href, tokens }) {
+      const text = this.parser.parseInline(tokens);
+      const external = /^https?:/.test(href);
+      return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${text}</a>`;
+    },
+  },
+});
+const html = await marked.parse(fullMarkdown(portfolio));
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{`${profile.name} · Text version`}</title>
+    <meta name="description" content={`${profile.name}: ${profile.summary}`} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="/llms-full.txt" title="Portfolio as Markdown" />
+  </head>
+  <body class="text-body">
+    <header class="text-bar">
+      <a class="text-bar__back" href="/">← 3D portfolio</a>
+      <nav class="text-bar__raw" aria-label="Raw files">
+        <a href="/llms.txt">llms.txt</a>
+        <a href="/llms-full.txt">llms-full.txt</a>
+      </nav>
+    </header>
+    <p class="text-fallback" id="fallback-note" hidden>
+      Showing the text version because 3D isn't available on this device.
+    </p>
+    <main class="text-main" set:html={html} />
+    <script is:inline>
+      if (new URLSearchParams(location.search).has('fallback')) {
+        document.getElementById('fallback-note').hidden = false;
+        document.querySelector('.text-bar__back').hidden = true;
+      }
+    </script>
+  </body>
+</html>

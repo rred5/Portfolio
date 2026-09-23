@@ -1,0 +1,44 @@
+---
+// Shell for the 3D routes (/, /projects, /experience, /skills, /about). Every route mounts the same
+// app with a different starting view, so deep links work on any static host (spec §3.1).
+import '@fontsource/lilita-one/400.css';
+import '@fontsource/nunito/400.css';
+import '@fontsource/nunito/700.css';
+import '@fontsource/nunito/800.css';
+import '../styles/tokens.css';
+import '../styles/app.css';
+import App from '../app/App';
+import { assertValidContent } from '../content/validate';
+import { portfolio } from '../content/portfolio';
+import type { SectionId } from '../content/types';
+
+interface Props {
+  initial: 'island' | SectionId;
+  title: string;
+  description: string;
+}
+
+assertValidContent(portfolio);
+const { initial, title, description } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#1f6fb2" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="text/markdown" href="/llms-full.txt" title="Portfolio as Markdown" />
+    <link rel="alternate" type="text/html" href="/text" title="Text version" />
+  </head>
+  <body class="app-body">
+    <App client:only="react" initial={initial} />
+    <noscript>
+      <div class="noscript">
+        The 3D portfolio needs JavaScript. <a href="/text">Read the text version</a>.
+      </div>
+    </noscript>
+  </body>
+</html>

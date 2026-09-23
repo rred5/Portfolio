@@ -1,0 +1,150 @@
+/* /text page and 404: plain, readable single column in the site's typography. */
+.text-body {
+  background: var(--cream);
+  line-height: 1.6;
+  font-size: 17px;
+}
+
+.text-bar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px max(16px, calc((100vw - 760px) / 2));
+  background: var(--cream);
+  border-bottom: var(--border);
+  z-index: 1;
+}
+
+.text-bar a {
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.text-bar__raw {
+  display: flex;
+  gap: 16px;
+}
+
+.text-fallback {
+  max-width: 760px;
+  margin: 16px auto 0;
+  padding: 10px 14px;
+  background: var(--cue);
+  border: var(--border);
+  border-radius: var(--radius);
+  font-weight: 700;
+}
+
+.text-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 96px;
+}
+
+.text-main h1,
+.text-main h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.text-main h1 {
+  font-size: clamp(40px, 8vw, 64px);
+  margin: 16px 0 8px;
+}
+
+.text-main h2 {
+  font-size: 32px;
+  margin: 48px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: var(--border);
+  scroll-margin-top: 72px;
+}
+
+.text-main h3 {
+  font-size: 21px;
+  font-weight: 800;
+  margin: 28px 0 4px;
+}
+
+.text-main blockquote {
+  margin: 0 0 16px;
+  padding: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.text-main blockquote p {
+  margin: 0;
+}
+
+.text-main p {
+  margin: 8px 0;
+}
+
+.text-main ul {
+  padding-left: 22px;
+}
+
+.text-main a {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration-thickness: 2px;
+}
+
+.text-main em {
+  color: var(--muted);
+}
+
+.notfound {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.notfound h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(48px, 12vw, 96px);
+  margin: 0;
+  color: var(--white);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: var(--shadow);
+}
+
+.notfound p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.notfound__links {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: var(--cream);
+  color: var(--ink);
+  border: var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  font: 800 16px var(--font-body);
+  text-decoration: none;
+}
+
+.pill-button:hover {
+  background: var(--white);
+}

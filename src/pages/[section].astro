@@ -1,0 +1,17 @@
+---
+import AppPage from '../layouts/AppPage.astro';
+import { profile, sections } from '../content/portfolio';
+import type { Section } from '../content/types';
+
+export function getStaticPaths() {
+  return sections.map((section) => ({ params: { section: section.id }, props: { section } }));
+}
+
+const { section } = Astro.props as { section: Section };
+---
+
+<AppPage
+  initial={section.id}
+  title={`${section.label} · ${profile.name}`}
+  description={section.intro ?? `${section.label} from ${profile.name}'s developer portfolio.`}
+/>

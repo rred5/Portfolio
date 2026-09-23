@@ -1,8 +1,8 @@
 # Climbing Island Portfolio: Design & Implementation Spec
 
-**Status:** DRAFT v2, all proposals resolved, awaiting final approval. Once approved, this document is
-authoritative: nothing outside it gets built without discussing it first, and anything still undefined
-during implementation is asked about, not invented.
+**Status:** APPROVED (2026-09-23) and implemented as v1. This document is authoritative: nothing
+outside it gets built without discussing it first, and anything still undefined is asked about, not
+invented. Where v1 differs from the text below, §20 says how and why.
 
 Items tagged **[Pn]** started as proposals for details the brief didn't cover. All have now been
 answered; §17 records how each one was resolved.
@@ -53,6 +53,7 @@ the same content data.
 | D20 | Name placement | Island: **big, top-center** with "Developer Portfolio" underneath. Sections: **small, top-left**, and clicking it returns to the island |
 | D21 | Section top bar | Name top-left · section title small **top-middle** (centered over the wall area) · "Text version" top-right |
 | D22 | Hover preview | **View-only.** Fades out as soon as the cursor leaves the hold and can't be clicked. Clicking the hold pins the card |
+| D23 | Framework | **Astro kept.** Next.js was considered; Astro chosen for the lighter download and zero-JS text pages. Responsiveness doesn't depend on the framework |
 
 ---
 
@@ -771,3 +772,21 @@ on timing.
 7. **Navigation:** rail + dock variants → you pick → delete the other.
 8. **Mobile:** bottom sheet, tap model, portrait framings, performance tier.
 9. **Polish & performance:** loading budget, preload, fallback, cross-browser check.
+
+---
+
+## 20. Implementation notes (v1)
+
+Small calls made while building, for review:
+
+| Topic | What v1 does | Why |
+|---|---|---|
+| D4 model packs | **No packs used.** Everything, props included, is generated in code with the shared toon material | Packs weren't needed to reach the look, and it keeps the site dependency-free and small (~360 KB gz JS+CSS in total). Packs can still be added for extra props; `CREDITS.md` has the slot |
+| Text version order | Projects and Experience list **newest first** in `/text` and `/llms-full.txt`; the walls stay oldest-first bottom → top | Resume convention for reading |
+| `Section.navLabel` | Extra content field: short nav label (`About` for "About & Contact") | "About & Contact" doesn't fit a 72px rail button |
+| Nav default | `?nav=rail` is the default when no `?nav=` is given | One variant has to be the default during the comparison |
+| Poses | Poses are **generated** from each hold's position (`src/scenes/wall/route.ts`) instead of hand-written per hold; support holds are placed where the other limbs land | Works for any wall size from 3 to 8 items with no manual authoring; still "one predefined pose per hold" |
+| Island regions | Regions are separated by narrow water channels (a cross-shaped river) | Clearest possible boundary between regions |
+| Glacier outfit | Crampons shown as a plate under the boots | Readable at this scale |
+| Tab order | Top bar → hold tags → nav → card | Tags (the content) come before navigation |
+| Transition timings | As in §9.1, unchanged | Tune in `src/config/motion.ts` |
