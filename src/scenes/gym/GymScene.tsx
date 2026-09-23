@@ -11,11 +11,13 @@ import {
   MeshBasicMaterial,
   MeshToonMaterial,
   PlaneGeometry,
+  Vector3,
   type BufferGeometry,
 } from 'three';
 import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
-import { OUTFITS } from '../../climber/outfits';
+import { Person, type PersonPose } from '../../climber/Person';
+import { OUTFITS, PEOPLE } from '../../climber/outfits';
 import { rng, range, pick, type Rng } from '../../lib/rng';
 import { box, flat, merge, paint, place } from '../../render/geo';
 import { shadowMap } from '../../render/shadows';
@@ -27,6 +29,7 @@ import { wallLayout, type WallLayout } from '../layouts';
 import { canvasTexture, inWall } from '../wall/helpers';
 import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
+import { controlPanel, gymFurniture, neighbourFrame, neighbourWall } from './props';
 import type { Spot } from '../wall/route';
 import { toWorld } from '../wall/types';
 
@@ -204,16 +207,8 @@ function buildRoom(layout: WallLayout) {
   parts.push(place(box(0.3, 7, 14, '#34384f'), [6.6, 3.5, 5]));
   parts.push(place(box(16, 0.3, 14, '#2a2d40'), [0, 6.2, 5]));
 
-  // Neighbouring bouldering wall on the right, with coloured holds.
-  // Holds are built in the panel's own frame (front face at z = 0.125) and moved with it, so they
-  // sit on the face whatever its angle.
-  const nbParts: BufferGeometry[] = [box(3.4, 4.6, 0.25, '#6c7a96')];
-  const nbColors = ['#ff4fa3', '#35d05a', '#ffd23f', '#29c6f0', '#8f5bff'];
-  for (let i = 0; i < 26; i++) {
-    const g = kilterHold(r, range(r, 0.1, 0.18), pick(r, nbColors));
-    nbParts.push(place(g, [range(r, -1.5, 1.5), range(r, -1.9, 2.0), 0.125], [0, 0, range(r, -0.6, 0.6)]));
-  }
-  parts.push(place(merge(nbParts), [4.6, 2.3, 0.1], [0.12, -0.25, 0]));
+  // Bench, hangboard, campus board, shoe cubbies.
+  parts.push(gymFurniture(r));
 
   // Crash mat pile and chalk bucket.
   parts.push(place(box(1.6, 0.35, 1.1, '#e4572e'), [-3.4, 0.2, 2.6], [0, 0.2, 0]));
@@ -232,12 +227,44 @@ function buildRoom(layout: WallLayout) {
   return merge(parts);
 }
 
+/** Someone on the pad pile watching the board. */
+const WATCHER: PersonPose = { kind: 'sit', seat: [-2.85, 0.86, 2.75], yaw: 2.05, look: [-0.3, 2.3, 1.6] };
+
+/** Neighbour wall with its problems, the control panel, and the two people who use them. */
+function buildExtras() {
+  const neighbour = neighbourWall(rng(512));
+  const frame = neighbourFrame();
+  const pink = neighbour.problems[0]!;
+  const boulderer: PersonPose = {
+    kind: 'hang',
+    wall: frame,
+    pelvis: [(pink[3]![0] + pink[4]![0]) / 2, 2.45],
+    lh: pink[3]!,
+    rh: pink[4]!,
+    lf: pink[2]!,
+    rf: [pink[2]![0] + 0.35, 1.7],
+  };
+  const panelAt = new Vector3(2.55, 0.03, 0.95);
+  const panel = controlPanel(panelAt, -0.35);
+  noInk.add(panel.screen);
+  const setterAt: [number, number, number] = [3.05, 0.03, 1.22];
+  const setter: PersonPose = {
+    kind: 'stand',
+    at: setterAt,
+    yaw: Math.atan2(panelAt.x - setterAt[0], panelAt.z - setterAt[2]),
+    touch: panel.touch.toArray() as [number, number, number],
+    look: panel.touch.toArray() as [number, number, number],
+  };
+  return { neighbour, panel, boulderer, setter };
+}
+
 export default function GymScene({ onReady }: SectionSceneProps) {
   const layout = wallLayout('projects');
   const room = useMemo(() => buildRoom(layout), [layout]);
+  const extras = useMemo(buildExtras, []);
   const decor = useMemo(() => {
-    const mural = texturedPlane(4.2, 2.4, drawMural);
-    mural.position.set(-4.15, 3.2, -0.39);
+    const mural = texturedPlane(3.4, 1.5, drawMural);
+    mural.position.set(-4.5, 4.45, -0.39);
     const mural2 = texturedPlane(3.2, 2.2, (c, w, h) => {
       drawMural(c, w, h);
     });
@@ -246,7 +273,7 @@ export default function GymScene({ onReady }: SectionSceneProps) {
     const p1 = texturedPlane(0.8, 1.1, (c, w, h) => drawPoster(c, w, h, '#ffd23f', 'COMP', 'SAT 7PM'), 256);
     p1.position.set(3.0, 5.0, -0.39);
     const p2 = texturedPlane(0.8, 1.1, (c, w, h) => drawPoster(c, w, h, '#3ee0c5', 'CRIMP', 'CLUB NIGHT'), 256);
-    p2.position.set(-2.55, 1.6, -0.39);
+    p2.position.set(-6.05, 2.4, -0.39);
     const bulbs = new MeshBasicMaterial({ color: '#fff3c4' });
     const bulbGeo = new IcosahedronGeometry(0.13, 1);
     const lamps = [
@@ -272,8 +299,9 @@ export default function GymScene({ onReady }: SectionSceneProps) {
     return () => {
       off();
       for (const l of decor.lamps) noInk.delete(l);
+      noInk.delete(extras.panel.screen);
     };
-  }, [onReady, decor]);
+  }, [onReady, decor, extras]);
 
   // Ambient: faint shimmer in the lights.
   const t0 = useRef(0);
@@ -309,6 +337,12 @@ export default function GymScene({ onReady }: SectionSceneProps) {
       {decor.lamps.map((l, i) => (
         <primitive key={`l${i}`} object={l} />
       ))}
+      <mesh geometry={extras.neighbour.geometry} material={toonVC()} castShadow receiveShadow />
+      <mesh geometry={extras.panel.geometry} material={toonVC()} castShadow />
+      <primitive object={extras.panel.screen} />
+      <Person section="projects" outfit={PEOPLE.boulderer} pose={extras.boulderer} />
+      <Person section="projects" outfit={PEOPLE.watcher} pose={WATCHER} />
+      <Person section="projects" outfit={PEOPLE.setter} pose={extras.setter} />
       <Holds layout={layout} style={kilterStyle} />
       <Climber layout={layout} outfit={OUTFITS.gym} />
     </group>

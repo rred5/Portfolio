@@ -4,6 +4,8 @@ import type { EnvId } from '../config/sections';
 export interface Outfit {
   skin: string;
   hair: string;
+  /** Bun (default) or short hair. */
+  hairStyle?: 'bun' | 'short';
   shirt: string;
   sleeves: 'none' | 'short' | 'long' | 'puffy';
   pants: string;
@@ -75,3 +77,43 @@ export const OUTFITS: Record<EnvId, Outfit> = {
     chalkBag: '#ff5a36',
   },
 };
+
+/** The gym's regulars (spec §7.1 background life): no harness, so it matches their trousers. */
+export const PEOPLE = {
+  boulderer: {
+    skin: '#c68642',
+    hair: '#1b1b1b',
+    hairStyle: 'short',
+    shirt: '#ffd23f',
+    sleeves: 'none',
+    pants: '#3a5a8c',
+    legs: 'long',
+    shoes: '#35d05a',
+    sole: '#2b2d42',
+    harness: '#3a5a8c',
+    chalkBag: '#ff4fa3',
+  },
+  watcher: {
+    skin: '#f1c9a5',
+    hair: '#e0b25a',
+    shirt: '#8f5bff',
+    sleeves: 'short',
+    pants: '#2b2d42',
+    legs: 'shorts',
+    shoes: '#ff8a3d',
+    sole: '#2b2d42',
+    harness: '#2b2d42',
+  },
+  setter: {
+    skin: '#8d5a3b',
+    hair: '#2b1a12',
+    hairStyle: 'short',
+    shirt: '#e8423c',
+    sleeves: 'long',
+    pants: '#6b4a2e',
+    legs: 'long',
+    shoes: '#f4f1ea',
+    sole: '#2b2d42',
+    harness: '#6b4a2e',
+  },
+} satisfies Record<string, Outfit>;

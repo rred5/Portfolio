@@ -147,7 +147,7 @@ function chalkBagGeometry(color: string): BufferGeometry {
   ]);
 }
 
-interface Rig {
+export interface Rig {
   root: Group;
   torso: Mesh;
   shorts: Mesh;
@@ -170,7 +170,7 @@ interface Rig {
   chips: InstancedMesh | null;
 }
 
-function buildRig(o: Outfit): Rig {
+export function buildRig(o: Outfit): Rig {
   const root = new Group();
   root.name = 'climber';
   const puffy = o.sleeves === 'puffy';
@@ -208,13 +208,15 @@ function buildRig(o: Outfit): Rig {
     const cap = makeMesh(new SphereGeometry(R * 1.08, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat, head);
     cap.rotation.x = -0.45;
     cap.position.set(0, R * 0.04, -R * 0.03);
-    const bun = makeMesh(GEO.ball, hairMat, head);
-    bun.position.set(0, R * 0.5, -R * 0.95);
-    bun.scale.setScalar(R * 0.42);
-    const tie = makeMesh(RING, toon(o.shoes), head);
-    tie.position.set(0, R * 0.38, -R * 0.83);
-    tie.rotation.x = 0.9;
-    tie.scale.setScalar(R * 0.26);
+    if (o.hairStyle !== 'short') {
+      const bun = makeMesh(GEO.ball, hairMat, head);
+      bun.position.set(0, R * 0.5, -R * 0.95);
+      bun.scale.setScalar(R * 0.42);
+      const tie = makeMesh(RING, toon(o.shoes), head);
+      tie.position.set(0, R * 0.38, -R * 0.83);
+      tie.rotation.x = 0.9;
+      tie.scale.setScalar(R * 0.26);
+    }
   }
   // Face: only seen when the climber glances back over a shoulder.
   const eyeGeo = new SphereGeometry(R * 0.12, 8, 6);
@@ -275,6 +277,79 @@ function buildRig(o: Outfit): Rig {
   noInk.add(chips);
 
   return { root, torso, shorts, belt, neck, head, shoulder, upperArm, sleeve, forearm, elbow, hand, thigh, legLoop, shin, knee, foot, chalk, axes, chips };
+}
+
+/** World-space joints a body is posed from (the climber and the gym's other people). */
+export interface BodyJoints {
+  pelvis: Vector3;
+  chest: Vector3;
+  head: Vector3;
+  sh: Record<'L' | 'R', Vector3>;
+  hip: Record<'L' | 'R', Vector3>;
+  el: Record<'L' | 'R', Vector3>;
+  kn: Record<'L' | 'R', Vector3>;
+  ha: Record<'L' | 'R', Vector3>;
+  ft: Record<'L' | 'R', Vector3>;
+  bag: Vector3;
+  yb: Vector3;
+  torsoQ: Quaternion;
+}
+
+/**
+ * Places every body part on the joints. Feet are oriented by the given frame: toes along -back
+ * (into the wall for a climber, forward for someone standing), soles along -up.
+ */
+export function placeBody(rig: Rig, J: BodyJoints, outfit: Outfit, breathe: number, right: Vector3, up: Vector3, back: Vector3) {
+  const puffy = outfit.sleeves === 'puffy';
+  const bulk = puffy ? 1.2 : 1;
+  const yb = J.yb;
+  const torsoLen = J.pelvis.distanceTo(J.chest);
+  rig.torso.quaternion.copy(J.torsoQ);
+  rig.torso.position.copy(J.pelvis).addScaledVector(yb, 0.02);
+  rig.torso.scale.set(0.2 * bulk, torsoLen + 0.06, 0.135 * bulk * (1 + breathe * 3));
+  rig.shorts.quaternion.copy(J.torsoQ);
+  rig.shorts.position.copy(J.pelvis);
+  rig.shorts.scale.set(0.175, 1, 0.14);
+  rig.belt.quaternion.copy(J.torsoQ);
+  rig.belt.position.copy(J.pelvis).addScaledVector(yb, 0.08);
+  rig.belt.scale.set(0.183, 0.16, 0.148);
+  tmp.copy(J.pelvis).addScaledVector(yb, torsoLen + 0.02);
+  segment(rig.neck, tmp, J.head, 0.058);
+  rig.head.position.copy(J.head);
+
+  for (const sd of ['L', 'R'] as const) {
+    rig.shoulder[sd].position.copy(J.sh[sd]);
+    rig.shoulder[sd].scale.setScalar(0.078 * bulk);
+    segment(rig.upperArm[sd], J.sh[sd], J.el[sd], 0.07 * bulk);
+    const sl = rig.sleeve[sd];
+    if (sl) {
+      tmp3.lerpVectors(J.sh[sd], J.el[sd], 0.42);
+      segment(sl, J.sh[sd], tmp3, 0.086);
+    }
+    segment(rig.forearm[sd], J.el[sd], J.ha[sd], 0.064 * (puffy ? 1.18 : 1));
+    rig.elbow[sd].position.copy(J.el[sd]);
+    rig.elbow[sd].scale.setScalar(0.061 * bulk);
+    rig.hand[sd].position.copy(J.ha[sd]);
+    rig.hand[sd].scale.setScalar(0.064);
+    segment(rig.thigh[sd], J.hip[sd], J.kn[sd], 0.098);
+    tmp3.lerpVectors(J.hip[sd], J.kn[sd], 0.2);
+    rig.legLoop[sd].position.copy(tmp3);
+    segDir.subVectors(J.kn[sd], J.hip[sd]).normalize();
+    rig.legLoop[sd].quaternion.setFromUnitVectors(Y, segDir);
+    rig.legLoop[sd].scale.set(0.1, 0.14, 0.1);
+    segment(rig.shin[sd], J.kn[sd], J.ft[sd], 0.078);
+    rig.knee[sd].position.copy(J.kn[sd]);
+    rig.knee[sd].scale.setScalar(outfit.legs === 'long' ? 0.08 : 0.072);
+    // Shoe: sitting just under the ankle, sole down.
+    const f = rig.foot[sd];
+    f.position.copy(J.ft[sd]).addScaledVector(back, 0.03).addScaledVector(up, -0.02);
+    basis.makeBasis(right, up, back);
+    f.quaternion.setFromRotationMatrix(basis);
+  }
+  if (rig.chalk) {
+    rig.chalk.position.copy(J.bag);
+    rig.chalk.quaternion.copy(J.torsoQ);
+  }
 }
 
 interface Chip {
@@ -494,9 +569,6 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     xb.crossVectors(yb, zb).normalize();
     basis.makeBasis(xb, yb, zb);
     J.torsoQ.setFromRotationMatrix(basis);
-    const torsoLen = J.pelvis.distanceTo(J.chest);
-    const puffy = outfit.sleeves === 'puffy';
-    const bulk = puffy ? 1.2 : 1;
     // Chalk bag hangs off the back of the harness belt.
     J.bag.copy(J.pelvis).addScaledVector(yb, 0.02).addScaledVector(zb, 0.2);
 
@@ -522,19 +594,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     }
 
     // --- Place parts ----------------------------------------------------------------------------
-    rig.torso.quaternion.copy(J.torsoQ);
-    rig.torso.position.copy(J.pelvis).addScaledVector(yb, 0.02);
-    rig.torso.scale.set(0.2 * bulk, torsoLen + 0.06, 0.135 * bulk * (1 + breathe * 3));
-    rig.shorts.quaternion.copy(J.torsoQ);
-    rig.shorts.position.copy(J.pelvis);
-    rig.shorts.scale.set(0.175, 1, 0.14);
-    rig.belt.quaternion.copy(J.torsoQ);
-    rig.belt.position.copy(J.pelvis).addScaledVector(yb, 0.08);
-    rig.belt.scale.set(0.183, 0.16, 0.148);
-
-    tmp.copy(J.pelvis).addScaledVector(yb, torsoLen + 0.02);
-    segment(rig.neck, tmp, J.head, 0.058);
-    rig.head.position.copy(J.head);
+    placeBody(rig, J, outfit, breathe, def.right, def.up, def.normal);
     if (a.reach) J.look.copy(a.reach === 'L' ? J.ha.L : J.ha.R);
     else J.look.copy(J.chest).addScaledVector(def.up, 0.8);
     J.look.addScaledVector(def.normal, -0.6);
@@ -557,34 +617,6 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     rig.head.lookAt(J.look);
 
     for (const sd of ['L', 'R'] as const) {
-      rig.shoulder[sd].position.copy(J.sh[sd]);
-      rig.shoulder[sd].scale.setScalar(0.078 * bulk);
-      segment(rig.upperArm[sd], J.sh[sd], J.el[sd], 0.07 * bulk);
-      const sl = rig.sleeve[sd];
-      if (sl) {
-        tmp3.lerpVectors(J.sh[sd], J.el[sd], 0.42);
-        segment(sl, J.sh[sd], tmp3, 0.086);
-      }
-      segment(rig.forearm[sd], J.el[sd], J.ha[sd], 0.064 * (puffy ? 1.18 : 1));
-      rig.elbow[sd].position.copy(J.el[sd]);
-      rig.elbow[sd].scale.setScalar(0.061 * bulk);
-      rig.hand[sd].position.copy(J.ha[sd]);
-      rig.hand[sd].scale.setScalar(0.064);
-      segment(rig.thigh[sd], J.hip[sd], J.kn[sd], 0.098);
-      tmp3.lerpVectors(J.hip[sd], J.kn[sd], 0.2);
-      rig.legLoop[sd].position.copy(tmp3);
-      segDir.subVectors(J.kn[sd], J.hip[sd]).normalize();
-      rig.legLoop[sd].quaternion.setFromUnitVectors(Y, segDir);
-      rig.legLoop[sd].scale.set(0.1, 0.14, 0.1);
-      segment(rig.shin[sd], J.kn[sd], J.ft[sd], 0.078);
-      rig.knee[sd].position.copy(J.kn[sd]);
-      rig.knee[sd].scale.setScalar(outfit.legs === 'long' ? 0.08 : 0.072);
-      // Shoe: toe into the wall, sole down, sitting just under the ankle.
-      const f = rig.foot[sd];
-      f.position.copy(J.ft[sd]).addScaledVector(def.normal, 0.03).addScaledVector(def.up, -0.02);
-      basis.makeBasis(def.right, def.up, def.normal);
-      f.quaternion.setFromRotationMatrix(basis);
-
       const axe = rig.axes?.[sd];
       if (axe) {
         // Shaft from the hand up to the pick, pick pointing into the wall.
@@ -601,11 +633,6 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
         axe.scale.set(1, len + 0.08, 1);
       }
     }
-    if (rig.chalk) {
-      rig.chalk.position.copy(J.bag);
-      rig.chalk.quaternion.copy(J.torsoQ);
-    }
-
     // Ice chips fall; chalk drifts, swells and fades.
     if (rig.chips) {
       const m = rig.chips;
