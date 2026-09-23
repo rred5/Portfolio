@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { sectionsInOrder, itemById } from '../content/query';
+import { itemById, sectionsInOrder, siblings } from '../content/query';
 import { SECTION_IDS } from '../config/sections';
 import { tagButtons } from '../state/registry';
 import { viewFromPath } from '../state/router';
@@ -65,7 +65,7 @@ export function useRouterSync() {
   }, []);
 }
 
-/** Esc closes the card; 1–4 jump to sections, 0 to the island (spec §8.4, §12.3). */
+/** Esc closes the card, ← → step between items; 1–4 jump to sections, 0 to the island (spec §8.4, §12.3). */
 export function useKeyboard() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -83,6 +83,16 @@ export function useKeyboard() {
         return;
       }
       if (!s.ready) return;
+      // ← → step through the items of the wall while a card is pinned.
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && s.pinnedItem) {
+        const item = itemById(s.pinnedItem);
+        const to = item && (e.key === 'ArrowLeft' ? siblings(item).prev : siblings(item).next);
+        if (to) {
+          e.preventDefault();
+          s.pin(to.id, s.pinSource ?? 'keyboard');
+        }
+        return;
+      }
       if (e.key === '0') s.navigate('island');
       const n = Number(e.key);
       if (n >= 1 && n <= sectionsInOrder.length) s.navigate(sectionsInOrder[n - 1]!.id);

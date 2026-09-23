@@ -14,6 +14,13 @@ export function itemById(id: string): Item | undefined {
   return items.find((i) => i.id === id);
 }
 
+/** The items just below and above this one on its wall. */
+export function siblings(item: Item): { prev?: Item; next?: Item } {
+  const list = itemsFor(item.section);
+  const i = list.findIndex((x) => x.id === item.id);
+  return { prev: list[i - 1], next: list[i + 1] };
+}
+
 export function sectionById(id: SectionId) {
   const s = sections.find((x) => x.id === id);
   if (!s) throw new Error(`Unknown section ${id}`);

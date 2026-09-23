@@ -18,6 +18,7 @@ import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { rng, range, pick, type Rng } from '../../lib/rng';
 import { box, flat, merge, paint, place } from '../../render/geo';
+import { shadowMap } from '../../render/shadows';
 import { toonRamp, toonVC } from '../../render/toon';
 import { noInk } from '../../state/registry';
 import { getState } from '../../state/store';
@@ -291,7 +292,7 @@ export default function GymScene({ onReady }: SectionSceneProps) {
         intensity={2.3}
         color="#fff1d6"
         castShadow
-        shadow-mapSize={[1536, 1536]}
+        shadow-mapSize={shadowMap(1536)}
         shadow-camera-left={-4}
         shadow-camera-right={4}
         shadow-camera-top={5}

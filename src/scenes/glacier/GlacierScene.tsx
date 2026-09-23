@@ -21,6 +21,7 @@ import { fbm } from '../../lib/noise';
 import { pick, rng, range, type Rng } from '../../lib/rng';
 import { flat, jitter, merge, paint, paintFaces, place } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
+import { shadowMap } from '../../render/shadows';
 import { toonVC } from '../../render/toon';
 import { noInk } from '../../state/registry';
 import { getState } from '../../state/store';
@@ -232,7 +233,7 @@ export default function GlacierScene({ onReady }: SectionSceneProps) {
         intensity={2.5}
         color="#fff1e0"
         castShadow
-        shadow-mapSize={[1536, 1536]}
+        shadow-mapSize={shadowMap(1536)}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={8}

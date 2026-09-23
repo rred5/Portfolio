@@ -17,6 +17,7 @@ import { motion } from '../../config/motion';
 import type { SectionId } from '../../content/types';
 import { clamp01, damp } from '../../lib/ease';
 import { rng, range } from '../../lib/rng';
+import { shadowMap } from '../../render/shadows';
 import { toonVC } from '../../render/toon';
 import { islandWaterMaterial } from '../../render/water';
 import { clock } from '../../state/clock';
@@ -201,7 +202,7 @@ export function Island() {
         position={[-8, 16, 10]}
         intensity={2.3}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={shadowMap(2048)}
         shadow-camera-left={-16}
         shadow-camera-right={16}
         shadow-camera-top={16}

@@ -20,6 +20,7 @@ import { fbm } from '../../lib/noise';
 import { pick, rng, range } from '../../lib/rng';
 import { flat, jitter, merge, paintFaces, place, rock } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
+import { shadowMap } from '../../render/shadows';
 import { toonVC } from '../../render/toon';
 import { noInk } from '../../state/registry';
 import { getState } from '../../state/store';
@@ -229,7 +230,7 @@ export default function CoastScene({ onReady }: SectionSceneProps) {
         intensity={2.6}
         color="#ffb782"
         castShadow
-        shadow-mapSize={[1536, 1536]}
+        shadow-mapSize={shadowMap(1536)}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={7}

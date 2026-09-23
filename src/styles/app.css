@@ -365,6 +365,45 @@
   border-radius: 999px;
 }
 
+.card__steps {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 2px dashed rgba(21, 21, 21, 0.14);
+}
+
+.step-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 48%;
+  height: 36px;
+  padding: 0 12px;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+  background: var(--white);
+  border: var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform 0.1s var(--ease-out);
+}
+
+.step-btn:hover {
+  transform: translateY(-1px);
+}
+
+.step-btn--next {
+  margin-left: auto;
+}
+
+.step-btn__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .card__close {
   position: absolute;
   top: 12px;

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from '../config/motion';
 import { sectionStyle } from '../config/sections';
-import { itemById, sectionById } from '../content/query';
+import { itemById, sectionById, siblings } from '../content/query';
 import type { Item } from '../content/types';
 import { tagButtons } from '../state/registry';
 import { getState, useStore } from '../state/store';
@@ -57,7 +57,29 @@ function CardInner({ item, mode, onClose, closeRef }: { item: Item; mode: Mode; 
       <div className="card__body">
         <CardBody item={item} />
       </div>
+      {mode === 'pinned' && <CardSteps item={item} />}
     </>
+  );
+}
+
+/** Previous / next item on the same wall (also ← → keys); the climber moves along with it. */
+function CardSteps({ item }: { item: Item }) {
+  const pin = useStore((s) => s.pin);
+  const { prev, next } = siblings(item);
+  if (!prev && !next) return null;
+  return (
+    <nav className="card__steps" aria-label="More in this section">
+      {prev && (
+        <button type="button" className="step-btn" aria-label={`Previous: ${prev.tag}`} onClick={(e) => pin(prev.id, e.detail === 0 ? 'keyboard' : 'pointer')}>
+          <span aria-hidden="true">‹</span> <span className="step-btn__label">{prev.tag}</span>
+        </button>
+      )}
+      {next && (
+        <button type="button" className="step-btn step-btn--next" aria-label={`Next: ${next.tag}`} onClick={(e) => pin(next.id, e.detail === 0 ? 'keyboard' : 'pointer')}>
+          <span className="step-btn__label">{next.tag}</span> <span aria-hidden="true">›</span>
+        </button>
+      )}
+    </nav>
   );
 }
 

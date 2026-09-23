@@ -9,6 +9,7 @@ import { fbm } from '../../lib/noise';
 import { pick, rng, range, type Rng } from '../../lib/rng';
 import { box, flat, jitter, merge, paint, paintFaces, place, rock, tree } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
+import { shadowMap } from '../../render/shadows';
 import { toonVC } from '../../render/toon';
 import { registerAtmosphere } from '../atmosphere';
 import { DriftingClouds, GrassTufts } from '../common/ambient';
@@ -212,7 +213,7 @@ export default function PlainsScene({ onReady }: SectionSceneProps) {
         intensity={2.6}
         color="#fff6e0"
         castShadow
-        shadow-mapSize={[1536, 1536]}
+        shadow-mapSize={shadowMap(1536)}
         shadow-camera-left={-6}
         shadow-camera-right={6}
         shadow-camera-top={7}
