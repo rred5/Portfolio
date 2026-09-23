@@ -1,6 +1,6 @@
-// Island layout (spec §6.1): four quadrant regions around a small central pool, split by water
-// channels. The camera looks north (−z) from a ~55° high angle; the glacier (tallest) sits at the
-// back so nothing is hidden.
+// Island layout (spec §6.1): four quadrant regions around a small central pool with a signpost,
+// split by winding water channels. The camera looks north (−z) from ~41° (52° in portrait); the
+// glacier (tallest) sits at the back so nothing is hidden.
 import { Vector3 } from 'three';
 import type { EnvId } from '../../config/sections';
 import type { SectionId } from '../../content/types';
@@ -14,6 +14,17 @@ export const CHANNEL = 0.34;
 
 export function islandRadius(theta: number): number {
   return ISLAND_R0 + 0.8 * Math.sin(3 * theta + 0.5) + 0.55 * Math.sin(5 * theta + 1.3) + 0.3 * Math.sin(9 * theta + 2.1);
+}
+
+/**
+ * Angular wobble of a region boundary at radius fraction f, so the channels between regions wind
+ * like rivers instead of forming a ruler-straight cross. Both regions sharing a boundary use the
+ * same angle, so the wobble matches on either side.
+ */
+export function boundaryWobble(angle: number, f: number): number {
+  const k = Math.round(angle / (Math.PI / 2));
+  const ramp = Math.min(1, Math.max(0, (f - 0.1) / 0.25));
+  return ramp * (0.13 * Math.sin(f * 7.5 + k * 1.9) + 0.05 * Math.sin(f * 17 + k * 3.1));
 }
 
 export interface RegionDef {
@@ -52,7 +63,9 @@ export const REGIONS: RegionDef[] = [
 
 export const regionFor = (section: SectionId) => REGIONS.find((r) => r.section === section)!;
 
+// A three-quarter view, lower than straight top-down so the terrain, cliffs and landmarks read in
+// depth while the four regions stay clearly separate.
 export const islandFraming: FramingSet = {
-  landscape: { target: new Vector3(0, 0.4, 0.9), dir: dirFrom(0, 55), fitW: 23, fitH: 17.5, fov: 30 },
-  portrait: { target: new Vector3(0, 0.4, 0.6), dir: dirFrom(0, 62), fitW: 21.5, fitH: 19, fov: 30 },
+  landscape: { target: new Vector3(0, 0.9, 0.6), dir: dirFrom(0, 41), fitW: 23, fitH: 15.5, fov: 30 },
+  portrait: { target: new Vector3(0, 0.7, 0.5), dir: dirFrom(0, 52), fitW: 20, fitH: 18, fov: 30 },
 };

@@ -45,6 +45,14 @@ export function islandWaterMaterial(): ShaderMaterial {
         float foam = step(0.88, band) * (1.0 - smoothstep(1.0, 6.0, edge)) * step(0.15, edge);
         float rim = (1.0 - smoothstep(0.1, 0.45, abs(edge - 0.25))) * step(-0.3, edge);
         col = mix(col, uFoam, max(foam * 0.8, rim * 0.9));
+        // Little cartoon wave marks scattered over open water, drifting slowly.
+        vec2 cell = (vXZ + vec2(uTime * 0.25, 0.0)) * vec2(0.3, 0.55);
+        vec2 id = floor(cell);
+        float h = fract(sin(dot(id, vec2(12.9898, 78.233))) * 43758.5453);
+        vec2 fc = fract(cell) - 0.5;
+        float wy = fc.y - 0.12 * sin(fc.x * 9.0 + h * 6.0);
+        float mark = step(0.72, h) * (1.0 - smoothstep(0.025, 0.06, abs(wy))) * (1.0 - smoothstep(0.12, 0.3, abs(fc.x)));
+        col = mix(col, uFoam, mark * 0.5 * smoothstep(1.5, 4.0, edge));
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
       }

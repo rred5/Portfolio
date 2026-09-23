@@ -23,7 +23,7 @@ import { clock } from '../../state/clock';
 import { noInk, outlineTargets, pickables, type Pickable } from '../../state/registry';
 import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
-import { buildClouds, buildIsland } from './build';
+import { buildBoat, buildClouds, buildHub, buildIsland } from './build';
 import { REGIONS } from './layout';
 
 /** Label anchors, lifted with their region. Read by the DOM overlay. */
@@ -51,6 +51,8 @@ export function Island() {
   const regions = useMemo(buildIsland, []);
   const clouds = useMemo(buildClouds, []);
   const water = useMemo(islandWaterMaterial, []);
+  const scenery = useMemo(() => ({ hub: buildHub(), boat: buildBoat() }), []);
+  const boatRef = useRef<Group>(null);
   const root = useRef<Group>(null);
   const regionGroups = useRef<Partial<Record<SectionId, Group>>>({});
   const lifts = useRef<Record<string, number>>({});
@@ -105,7 +107,9 @@ export function Island() {
       entries.push(p);
       outlineTargets.set(`region:${r.def.section}`, r.meshes);
     }
-    const off = registerAtmosphere('island', { fog: new Fog('#bfe6f7', 70, 170), background: '#1f6fb2' });
+    // Fog only darkens far water into the deep colour; it starts beyond the island even for the
+    // distant portrait camera.
+    const off = registerAtmosphere('island', { fog: new Fog('#1f6fb2', 120, 280), background: '#1f6fb2' });
     return () => {
       for (const p of entries) pickables.delete(p);
       for (const r of regionObjects) {
@@ -166,6 +170,14 @@ export function Island() {
       }
     }
 
+    // Sailboat circling the island, bobbing a little.
+    const boat = boatRef.current;
+    if (boat) {
+      const ba = 0.9 + (s.env.reduced ? 0 : time * 0.035);
+      boat.position.set(Math.cos(ba) * 15.5, s.env.reduced ? 0 : Math.sin(time * 1.7) * 0.05, Math.sin(ba) * 15.5);
+      boat.rotation.set(s.env.reduced ? 0 : Math.sin(time * 1.3) * 0.06, -(ba + Math.PI / 2), 0);
+    }
+
     for (let i = 0; i < clouds.length; i++) {
       const c = clouds[i]!;
       const ref = cloudRefs.current[i];
@@ -199,6 +211,10 @@ export function Island() {
         shadow-bias={-0.0015}
       />
       <mesh geometry={waterGeo} material={water} position={[0, 0, 0]} receiveShadow={false} />
+      <mesh geometry={scenery.hub} material={toonVC()} castShadow receiveShadow />
+      <group ref={boatRef}>
+        <mesh geometry={scenery.boat} material={toonVC()} castShadow />
+      </group>
       {regionObjects.map((r) => (
         <group key={r.def.section}>
           <primitive object={r.group} />

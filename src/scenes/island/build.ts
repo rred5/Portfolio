@@ -6,8 +6,8 @@ import type { EnvId } from '../../config/sections';
 import { fbm } from '../../lib/noise';
 import { rng, range, type Rng } from '../../lib/rng';
 import { smoothstep } from '../../lib/ease';
-import { box, cloud, flat, jitter, merge, paint, paintFaces, pine, place, rock, tree } from '../../render/geo';
-import { islandRadius, REGIONS, type RegionDef } from './layout';
+import { box, cloud, cone, cylinder, flat, jitter, merge, paint, paintFaces, pine, place, rock, tree } from '../../render/geo';
+import { boundaryWobble, islandRadius, REGIONS, type RegionDef } from './layout';
 
 const BOTTOM = -2.4;
 const RADIAL = [0.06, 0.4, 0.72, 1.0];
@@ -63,10 +63,15 @@ interface GridPoint {
   f: number;
 }
 
+/** Angle at fraction t across a region (0 = a0 edge, 1 = a1 edge), with the winding boundaries. */
+function regionAngle(def: RegionDef, t: number, f: number): number {
+  const e0 = def.a0 + boundaryWobble(def.a0, f);
+  const e1 = def.a1 + boundaryWobble(def.a1, f);
+  return e0 + (e1 - e0) * t;
+}
+
 function buildChunkTerrain(def: RegionDef, sector: number, ring: number): BufferGeometry {
   const env = def.env;
-  const a0 = def.a0 + ((def.a1 - def.a0) * sector) / ANG_SPLITS;
-  const a1 = def.a0 + ((def.a1 - def.a0) * (sector + 1)) / ANG_SPLITS;
   const f0 = RADIAL[ring]!;
   const f1 = RADIAL[ring + 1]!;
   const na = 4;
@@ -75,10 +80,12 @@ function buildChunkTerrain(def: RegionDef, sector: number, ring: number): Buffer
   const grid: GridPoint[][] = [];
   for (let i = 0; i <= na; i++) {
     const row: GridPoint[] = [];
-    const a = a0 + ((a1 - a0) * i) / na;
-    const R = islandRadius(a);
+    // Position across the whole region (0..1), so chunk seams inside a region line up.
+    const t = (sector * na + i) / (ANG_SPLITS * na);
     for (let j = 0; j <= nf; j++) {
       const f = f0 + ((f1 - f0) * j) / nf;
+      const a = regionAngle(def, t, f);
+      const R = islandRadius(a);
       const x = Math.cos(a) * f * R;
       const z = Math.sin(a) * f * R;
       row.push({ p: new Vector3(x, heightAt(env, x, z, f), z), f });
@@ -170,7 +177,8 @@ function spotAt(def: RegionDef, a: number, f: number): Spot {
 
 function scatter(def: RegionDef, r: Rng, n: number, fMin: number, fMax: number, avoid: Spot[], minDist: number): Spot[] {
   const out: Spot[] = [];
-  const margin = 0.12;
+  // Keeps clear of the winding channel edges.
+  const margin = 0.3;
   for (let tries = 0; out.length < n && tries < n * 40; tries++) {
     const a = range(r, def.a0 + margin, def.a1 - margin);
     const f = range(r, fMin, fMax);
@@ -307,13 +315,69 @@ function coastDecor(def: RegionDef, r: Rng): Deco[] {
     const rr = islandRadius(a) + range(r, 0.6, 1.4);
     out.push({ geometry: place(rock(r, range(r, 0.25, 0.4), '#9a5d44'), [Math.cos(a) * rr, 0.05, Math.sin(a) * rr]), a, f: 0.99 });
   }
-  for (const s of scatter(def, r, 6, 0.15, 0.7, [], 1.1)) {
+  // Lighthouse on the cliff top: the contact beacon.
+  const lh = spotAt(def, mid - 0.22, 0.86);
+  out.push({ geometry: place(lighthouse(), [lh.x, lh.y - 0.05, lh.z]), a: lh.a, f: lh.f });
+  for (const s of scatter(def, r, 6, 0.15, 0.7, [lh], 1.1)) {
     out.push({ geometry: place(rock(r, range(r, 0.3, 0.45), '#4fae3f', 0, 0.18), [s.x, s.y + 0.18, s.z], [0, 0, 0], [1, 0.8, 1]), a: s.a, f: s.f });
   }
   for (const s of scatter(def, r, 3, 0.75, 0.9, [], 1.5)) {
     out.push({ geometry: place(rock(r, 0.35, '#c9845c'), [s.x, s.y + 0.1, s.z]), a: s.a, f: s.f });
   }
   return out;
+}
+
+/** Red-and-white striped lighthouse with a glowing lamp room, base at y = 0. */
+function lighthouse(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const bands = 5;
+  const H = 1.9;
+  for (let k = 0; k < bands; k++) {
+    const y0 = (k / bands) * H;
+    const r0 = 0.36 - 0.12 * (k / bands);
+    const r1 = 0.36 - 0.12 * ((k + 1) / bands);
+    parts.push(place(cylinder(r1, r0, H / bands, 10, k % 2 ? '#e8423c' : '#fff8ec'), [0, y0 + H / bands / 2, 0]));
+  }
+  parts.push(place(cylinder(0.34, 0.34, 0.07, 10, '#2b2d42'), [0, H + 0.03, 0]));
+  parts.push(place(cylinder(0.2, 0.2, 0.32, 8, '#ffe27a'), [0, H + 0.23, 0]));
+  parts.push(place(cone(0.27, 0.34, 8, '#e8423c'), [0, H + 0.56, 0]));
+  parts.push(place(cylinder(0.46, 0.5, 0.16, 10, '#9aa0b0'), [0, 0.08, 0]));
+  return merge(parts);
+}
+
+/**
+ * Centre of the island where the channels meet: a small rock with a trailhead signpost pointing at
+ * the four regions. Not part of any region, so it stays put when the others fall.
+ */
+export function buildHub(): BufferGeometry {
+  const r = rng(9090);
+  const parts: BufferGeometry[] = [place(rock(r, 0.62, '#9a8f84', 1, 0.12), [0, 0.05, 0], [0, 0, 0], [1, 0.55, 1])];
+  parts.push(place(paintFaces(flat(new CylinderGeometry(0.5, 0.56, 0.12, 9)), () => '#8cc956'), [0, 0.36, 0]));
+  parts.push(place(cylinder(0.05, 0.06, 1.3, 6, '#7a5230'), [0, 1.0, 0]));
+  const signColors = ['#3e8fd6', '#ff4fa3', '#ff8a5b', '#58b83c'];
+  REGIONS.forEach((def, i) => {
+    const mid = (def.a0 + def.a1) / 2;
+    const board = merge([box(0.62, 0.17, 0.05, signColors[i % 4]!), place(cone(0.1, 0.14, 3, signColors[i % 4]!), [0.37, 0, 0], [0, 0, -Math.PI / 2], [1, 1, 0.35])]);
+    // Arrow points along +x before rotation; turn it toward the region.
+    parts.push(place(board, [0, 1.52 - i * 0.2, 0], [0, -mid, 0]));
+    // Offset along the arrow so the board hangs off the post rather than through it.
+    const b = parts[parts.length - 1]!;
+    b.translate(Math.cos(mid) * 0.3, 0, Math.sin(mid) * 0.3);
+  });
+  parts.push(place(cone(0.08, 0.14, 6, '#ffd23f'), [0, 1.72, 0]));
+  return merge(parts);
+}
+
+/** A small sailboat, bow along +x. */
+export function buildBoat(): BufferGeometry {
+  return merge([
+    place(box(1.1, 0.26, 0.42, '#fff8ec'), [0, 0.1, 0]),
+    place(box(1.14, 0.08, 0.46, '#e8423c'), [0, -0.02, 0]),
+    place(cone(0.21, 0.3, 4, '#fff8ec'), [0.62, 0.1, 0], [0, Math.PI / 4, -Math.PI / 2], [1, 1, 0.9]),
+    place(cylinder(0.025, 0.025, 1.3, 5, '#6b4a2e'), [0.05, 0.85, 0]),
+    place(paint(flat(new ConeGeometry(0.42, 1.05, 3)), '#ffffff'), [-0.12, 0.85, 0], [0, 0, 0], [0.9, 1, 0.12]),
+    place(box(0.14, 0.09, 0.02, '#ffd23f'), [0.1, 1.53, 0]),
+  ]);
 }
 
 const DECOR: Record<EnvId, (def: RegionDef, r: Rng) => Deco[]> = {
