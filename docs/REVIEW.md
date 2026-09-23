@@ -34,14 +34,11 @@ plus screenshot checks of every view on desktop and phone. v1 is tagged `v1-save
   and Open Graph tags are already in place.
 
 ### 2. Visual polish
-- **Climber personality**: the face is never seen (the camera is always behind). A quick glance
-  over the shoulder when a card is pinned would add a lot of character.
-- **Ropes**: glacier and coast are roped terrain; a rope from the harness down to the ground (plus a
-  couple of ice screws / quickdraws) would make them read as lead climbs.
-- **Grab feedback**: a small chalk puff (rock) or ice chips (already on the glacier) when the hand
-  lands on a hold.
-- **Island life**: snowfall on the glacier region, lit windows in the city, birds around the
-  hoodoos, a lighthouse beam. The regions are otherwise static.
+- ~~Climber glances back over the shoulder when a card is pinned (face, cheeks, smile)~~: done.
+- ~~Ropes on the glacier and sea cliff, through ice screws / quickdraws to a coiled pile~~: done.
+- ~~Chalk puff when a hand lands (and when leaving the chalk bag)~~: done.
+- **Island life**: gulls and snowfall over the glacier region are in; lit windows in the city or a
+  lighthouse lamp could follow.
 - **Surface transition**: returning to the island could reassemble the fallen chunks (reverse of
   the dive) for continuity.
 - **Hold ↔ card link** on desktop: a thin leader line from the pinned hold to the card.
