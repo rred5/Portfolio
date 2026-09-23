@@ -112,3 +112,43 @@ export function edgeRoll(opts: { left?: [number, number, number]; right?: [numbe
     return d;
   };
 }
+
+/**
+ * A free-standing vertical cliff between two ground points (x, z), from y0 up to y1, pushed in and
+ * out along its outward normal by noise: side faces of mesas, terrace steps, sea cliffs.
+ */
+export function cliffFace(
+  a: [number, number],
+  b: [number, number],
+  y0: number,
+  y1: number,
+  o: { segs: number; rows: number; rough: number; seed: number; color: (y: number, n: Vector3, c: Vector3) => ColorRepresentation },
+): BufferGeometry {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const len = Math.hypot(dx, dz);
+  // Outward normal: to the right of a → b, seen from above.
+  const nx = -dz / len;
+  const nz = dx / len;
+  const pt = (i: number, j: number) => {
+    const t = i / o.segs;
+    const y = y0 + ((y1 - y0) * j) / o.rows;
+    const along = t * len;
+    const push = o.rough * fbm(along * 0.25, y * 0.25, o.seed) + 0.25 * o.rough * fbm(along * 0.9, y * 0.9, o.seed + 1);
+    return new Vector3(a[0] + dx * t + nx * push, y, a[1] + dz * t + nz * push);
+  };
+  const pos: number[] = [];
+  for (let i = 0; i < o.segs; i++) {
+    for (let j = 0; j < o.rows; j++) {
+      const p00 = pt(i, j);
+      const p10 = pt(i + 1, j);
+      const p11 = pt(i + 1, j + 1);
+      const p01 = pt(i, j + 1);
+      for (const p of [p00, p10, p11, p00, p11, p01]) pos.push(p.x, p.y, p.z);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.computeVertexNormals();
+  return paintFaces(g, (c, n) => o.color(c.y, n, c));
+}

@@ -1,232 +1,283 @@
-// Skills: sunny plains, sandstone boulder (spec §7.3).
+// Skills: national-park sandstone terrace above farmland (spec §7.3). The climb is on the upper tier
+// of a tall mesa, starting from a ledge high above the plains; past the mesa's end the view drops
+// over lower terraces to patchwork wheat fields, a red barn and silo, with buttes on the horizon.
 import { useEffect, useMemo } from 'react';
-import { BufferAttribute, BufferGeometry, CylinderGeometry, Fog, IcosahedronGeometry, PlaneGeometry } from 'three';
+import { BufferAttribute, BufferGeometry, CylinderGeometry, Fog, IcosahedronGeometry, PlaneGeometry, type Vector3 } from 'three';
 import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
-import { smoothstep } from '../../lib/ease';
 import { fbm } from '../../lib/noise';
 import { pick, rng, range, type Rng } from '../../lib/rng';
-import { box, flat, jitter, merge, paint, paintFaces, place, rock, tree } from '../../render/geo';
-import { SkyDome } from '../../render/sky';
+import { box, cylinder, flat, jitter, merge, paint, paintFaces, place, rock } from '../../render/geo';
 import { shadowMap } from '../../render/shadows';
+import { SkyDome } from '../../render/sky';
 import { toonVC } from '../../render/toon';
 import { registerAtmosphere } from '../atmosphere';
-import { DriftingClouds, GrassTufts } from '../common/ambient';
+import { DriftingClouds } from '../common/ambient';
+import { barn, farmhouse, fence, field, hayBale, silo, treeRow, type Crop } from '../common/farm';
 import { wallLayout } from '../layouts';
 import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
-import { irregularRoll, reliefMesh } from '../wall/surface';
+import { cliffFace, edgeRoll, reliefMesh } from '../wall/surface';
 import { plainsWall } from '../walls';
 
-const BANDS = ['#e8a15a', '#df9853', '#efb271', '#e59f5c'];
-
+/** Sandstone strata, cream to deep red, bottom to top. */
+const BANDS = ['#e8a15a', '#d98446', '#f0b878', '#c96f3b', '#e59f5c', '#f3c792'];
+const VARNISH = '#6e3f26';
 const CHALK = '#fffaf0';
+/** Plains level, far below the start ledge. */
+const PLAINS_Y = -22;
+/** Lower terrace level, between the ledge and the plains. */
+const LOWER_Y = -10;
+/** The mesa's right-hand end (x), past which the view opens up. */
+const MESA_END = 4.2;
 
-/** Sandstone features: rounded edges and jugs in the rock colour, chalked where hands go. */
+const bandColor = (y: number, x: number) => BANDS[(((Math.floor((y + 0.12 * fbm(x * 0.3, y, 3)) / 0.6) % BANDS.length) + BANDS.length) % BANDS.length)]!;
+
+/** Sandstone features: jugs, huecos and flakes in the rock colour, chalked where hands go. */
 const style: HoldStyle = {
   interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, pocket: 1, flake: 1 }), size: 0.22, color: '#f2bd82', top: CHALK, topAmount: 0.55, rough: 0.14 }),
   support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1, pocket: 1, sloper: 1 }), size: range(r, 0.15, 0.19), color: '#e8a866', top: CHALK, topAmount: 0.4, rough: 0.14 }),
   decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, pocket: 2, sloper: 1, flake: 1 }), size: range(r, 0.1, 0.2), color: pick(r, BANDS), top: CHALK, topAmount: 0.08, rough: 0.16 }),
-  decorCount: 14,
-  decorArea: { u0: -2.6, u1: 2.6, v0: 0.4, v1: 4.1 },
+  decorCount: 16,
+  decorArea: { u0: -2.8, u1: 2.8, v0: 0.4, v1: 4.6 },
 };
 
-function sandstoneTower(r: Rng, height: number, radius: number): BufferGeometry {
+/** Rock colour for any face: strata bands, dark varnish streaks down steep faces, grass on tops. */
+function rockColor(y: number, n: Vector3, c: Vector3) {
+  if (n.y > 0.62) return fbm(c.x * 0.5, c.z * 0.5, 7) > 0 ? '#9cc95a' : '#b8c96a';
+  if (fbm(c.x * 0.9 + c.z * 0.9, y * 0.08, 12) > 0.34) return VARNISH;
+  return bandColor(y, c.x + c.z);
+}
+
+/** Juniper: a twisted grey trunk with dark green clumps, base at y = 0. */
+function juniper(r: Rng, s: number): BufferGeometry {
+  const parts: BufferGeometry[] = [
+    place(cylinder(0.05, 0.1, 0.7, 5, '#8a7f74'), [0, 0.3, 0], [0, 0, 0.35]),
+    place(cylinder(0.04, 0.06, 0.6, 5, '#8a7f74'), [0.3, 0.7, 0], [0, 0, -0.5]),
+  ];
+  for (const [x, y, z, k] of [
+    [-0.1, 0.8, 0, 0.35],
+    [0.5, 1.0, 0.05, 0.3],
+    [0.2, 1.15, -0.1, 0.28],
+  ] as const) {
+    parts.push(place(rock(r, k, '#3f7a4a', 1, 0.2), [x, y, z], [0, 0, 0], [1.3, 0.8, 1]));
+  }
+  return place(merge(parts), [0, 0, 0], [0, 0, 0], s);
+}
+
+/** Flat-topped butte made of stacked, shrinking strata tiers, base at y = 0. */
+function butte(r: Rng, radius: number, height: number): BufferGeometry {
   const parts: BufferGeometry[] = [];
   let y = 0;
   let rad = radius;
   let k = 0;
-  while (y < height) {
-    const h = range(r, 0.8, 1.6);
-    const g = new CylinderGeometry(rad * range(r, 0.82, 1), rad, h, 8, 1);
-    jitter(g, rad * 0.08, r);
+  while (y < height - 0.01) {
+    const h = Math.min(height - y, range(r, height * 0.15, height * 0.3));
+    const g = new CylinderGeometry(rad * range(r, 0.9, 0.98), rad, h, 9, 1);
+    jitter(g, rad * 0.06, r);
     parts.push(place(paint(flat(g), BANDS[k % BANDS.length]!), [0, y + h / 2, 0], [0, r() * 3, 0]));
     y += h;
-    rad *= range(r, 0.8, 0.97);
+    rad *= range(r, 0.72, 0.9);
     k++;
   }
+  parts.push(place(paint(flat(new CylinderGeometry(rad, rad, 0.4, 9, 1)), '#b8c96a'), [0, y, 0]));
   return merge(parts);
 }
 
-/** Rounded sandstone mass with strata bands and a grassy cap, base at y = 0. */
-function outcrop(r: Rng, w: number, h: number, d: number): BufferGeometry {
-  const g = new IcosahedronGeometry(1, 2);
-  jitter(g, 0.1, r);
-  const m = place(flat(g), [0, h * 0.45, 0], [0, 0, 0], [w, h * 0.55, d]);
-  return paintFaces(m, (c, n) => {
-    if (n.y > 0.6 && c.y > h * 0.55) return fbm(c.x * 2, c.z * 2, 46) > 0 ? '#8cc956' : '#7dbb4a';
-    return BANDS[Math.abs(Math.floor((c.y + 0.08 * fbm(c.x, c.z, 47)) / 0.55)) % BANDS.length]!;
-  });
-}
-
-/** Worn sandy ground in front of the boulder, with a ragged edge fading into the grass. */
-function apron(r: Rng): BufferGeometry {
-  const rings = 6;
-  const segs = 40;
-  const pts = (i: number, j: number) => {
-    const a = (j / segs) * Math.PI;
-    const k = i / rings;
-    const wob = 1 + 0.18 * fbm(Math.cos(a) * 2, Math.sin(a) * 2, 48);
-    const x = Math.cos(a) * 4.6 * k * wob;
-    const z = 0.05 + Math.sin(a) * 1.9 * k * wob;
-    return [x, 0.012 + 0.01 * r(), z] as const;
-  };
+/** A flat ribbon (road, creek) along a polyline, laid on the ground. */
+function strip(pts: [number, number][], width: number, color: string, y: (x: number, z: number) => number): BufferGeometry {
   const pos: number[] = [];
-  for (let i = 0; i < rings; i++) {
-    for (let j = 0; j < segs; j++) {
-      const a = pts(i, j);
-      const b = pts(i + 1, j);
-      const c = pts(i + 1, j + 1);
-      const d = pts(i, j + 1);
-      pos.push(...a, ...c, ...b, ...a, ...d, ...c);
-    }
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [ax, az] = pts[k]!;
+    const [bx, bz] = pts[k + 1]!;
+    const len = Math.hypot(bx - ax, bz - az);
+    const nx = (-(bz - az) / len) * width;
+    const nz = ((bx - ax) / len) * width;
+    const ya = y(ax, az);
+    const yb = y(bx, bz);
+    pos.push(ax - nx, ya, az - nz, bx + nx, yb, bz + nz, bx - nx, yb, bz - nz, ax - nx, ya, az - nz, ax + nx, ya, az + nz, bx + nx, yb, bz + nz);
   }
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   g.computeVertexNormals();
-  return paintFaces(g, (c) => {
-    const f = Math.hypot(c.x / 4.6, c.z / 1.9);
-    return f > 0.82 ? '#b8c96a' : fbm(c.x * 1.5, c.z * 1.5, 49) > 0.15 ? '#d9b27a' : '#e2bd86';
-  });
+  return paint(g, color);
+}
+
+/** Where the farmstead sits: in the wedge of plains visible past the mesa's end. */
+const FARM: [number, number] = [4, -125];
+
+/** Inside the mesa's footprint (hidden under it). */
+function underMesa(x: number, z: number) {
+  if (z > -0.6 || z < -60) return false;
+  const edge = MESA_END - 0.1 + ((z + 1.2) / -58.8) * -(MESA_END - 0.1 + 24);
+  return x < edge;
 }
 
 function buildScene() {
   const def = plainsWall;
   const r = rng(808);
-  const face = reliefMesh(def, {
-    u0: -3.8,
-    u1: 3.8,
-    v0: -0.25,
-    vTop: (u) => 4.65 + 0.4 * Math.sin(u * 1.2 + 0.4) + 0.3 * fbm(u, 0.5, 44) - 0.9 * Math.pow(Math.abs(u) / 3.8, 3),
-    nu: 50,
-    nv: 36,
-    roll: irregularRoll({ half: 3.8, band: 1.3, depth: 1.8, amp: 0.55, seed: 45, top: [0.8, 1.1] }),
-    color: (u, v, n) => {
-      if (n.y > 0.62 && v > 3.6) return fbm(u * 2, v, 7) > 0 ? '#8cc956' : '#7dbb4a';
-      const depth = def.surface(u, v);
-      if (depth < -0.07) return '#9a5a34';
-      const band = Math.floor((v + 0.1 * fbm(u, v, 3)) / 0.55);
-      return BANDS[((band % BANDS.length) + BANDS.length) % BANDS.length]!;
-    },
-  });
-  // Rock mass behind the face so the silhouette reads as a boulder.
-  const backG = new IcosahedronGeometry(1, 2);
-  jitter(backG, 0.08, r);
-  const back = place(
-    paintFaces(flat(backG), (c) => BANDS[Math.abs(Math.floor(c.y * 4)) % BANDS.length]!),
-    [0, 1.9, -2.3],
-    [0, 0, 0],
-    [3.7, 2.8, 2.4],
+  const parts: BufferGeometry[] = [];
+
+  // The climbing face: the front of the mesa's upper tier, rising far above the route.
+  parts.push(
+    reliefMesh(def, {
+      u0: -16,
+      u1: MESA_END + 0.2,
+      v0: -0.4,
+      vTop: (u) => 10.2 + 0.4 * Math.sin(u * 0.6),
+      nu: 110,
+      nv: 76,
+      roll: edgeRoll({ right: [MESA_END - 1.0, MESA_END + 0.2, 1.4] }),
+      color: (u, v, n) => {
+        if (n.y > 0.62) return v > 9.5 ? '#9cc95a' : '#e9c08a';
+        // Cracks and pockets (not the set-back tier above the route) are dark.
+        if (v < 4.9 && def.surface(u, v) < -0.2) return '#7a4428';
+        if (fbm(u * 1.1, v * 0.09, 12) > 0.36) return VARNISH;
+        return bandColor(v, u);
+      },
+    }),
   );
+  // The mesa ends in a prow: past the climbing face its side runs away back and to the left, so
+  // everything to the right of the wall is open view. Mesa top as a flat polygon.
+  const top = new BufferGeometry();
+  const T = 10.2;
+  // prettier-ignore
+  top.setAttribute('position', new BufferAttribute(new Float32Array([
+    -60, T, -0.6,  MESA_END, T, -0.6,  -24, T, -60,
+    -60, T, -0.6,  -24, T, -60,  -60, T, -60,
+  ]), 3));
+  top.computeVertexNormals();
+  parts.push(paint(top, '#b8c96a'));
+  parts.push(cliffFace([MESA_END - 0.1, -1.2], [-24, -60], LOWER_Y, 10.4, { segs: 50, rows: 24, rough: 0.7, seed: 31, color: rockColor }));
 
-  // Ground: flat near the wall, rolling hills further out.
-  const groundG = new PlaneGeometry(140, 140, 56, 56);
-  groundG.rotateX(-Math.PI / 2);
-  const gp = groundG.getAttribute('position');
-  for (let i = 0; i < gp.count; i++) {
-    const x = gp.getX(i);
-    const z = gp.getZ(i);
-    const d = Math.hypot(x, z * 1.2);
-    gp.setY(i, -0.02 + fbm(x * 0.05, z * 0.05, 91) * 5 * smoothstep(8, 30, d) + fbm(x * 0.3, z * 0.3, 92) * 0.12);
+  // The start ledge (a terrace step), its right end, and the cliff below it.
+  const ledgeTop = new PlaneGeometry(20.6, 2.6, 40, 5);
+  ledgeTop.rotateX(-Math.PI / 2);
+  const lp = ledgeTop.getAttribute('position');
+  for (let i = 0; i < lp.count; i++) {
+    const x = lp.getX(i) + (MESA_END - 10.1);
+    const z = lp.getZ(i) + 1.25;
+    lp.setXYZ(i, x, 0.02 * fbm(x * 2, z * 2, 5) - Math.max(0, z - 2.1) * 0.25, z);
   }
-  const ground = paintFaces(flat(groundG), (c) => (fbm(c.x * 0.2, c.z * 0.2, 93) > 0.1 ? '#62c046' : '#72d152'));
+  parts.push(paintFaces(flat(ledgeTop), (c) => (fbm(c.x * 0.8, c.z * 0.8, 8) > 0.25 ? '#c9a06a' : '#dcb47c')));
+  parts.push(cliffFace([-16, 2.5], [MESA_END + 0.2, 2.5], LOWER_Y, 0.0, { segs: 60, rows: 20, rough: 0.6, seed: 41, color: rockColor }));
+  parts.push(cliffFace([MESA_END + 0.2, 2.5], [MESA_END - 0.1, -1.2], LOWER_Y, 0.0, { segs: 8, rows: 20, rough: 0.4, seed: 42, color: rockColor }));
 
-  const props: BufferGeometry[] = [face, back, ground];
-  props.push(place(box(1.5, 0.28, 1.15, '#e4572e'), [0.1, 0.14, 0.95], [0, 0.08, 0]));
-  props.push(place(box(1.5, 0.04, 1.15, '#3a4a6b'), [0.1, 0.29, 0.95], [0, 0.08, 0]));
-
-  // Integration with the ground: a worn sandy apron at the base (where climbers stand and pads
-  // go), talus that has fallen off the face, and the boulder as part of a bigger outcrop.
-  props.push(apron(r));
-  for (let i = 0; i < 16; i++) {
-    const x = range(r, -4.3, 4.3);
-    const z = range(r, 0.15, 1.7);
-    if (Math.abs(x - 0.1) < 1.05 && z < 1.7) continue;
-    const s = range(r, 0.12, 0.38);
-    props.push(place(rock(r, s, pick(r, BANDS), 0, 0.3), [x, s * 0.25, z], [0, r() * 3, 0], [1, 0.7, 1]));
-  }
-  props.push(place(outcrop(r, 2.6, 4.2, 2.2), [-6.2, 0, -1.6], [0, 0.3, 0]));
-  props.push(place(outcrop(r, 2.0, 3.0, 1.8), [7.4, 0, -2.8], [0, -0.4, 0]));
-  props.push(place(outcrop(r, 1.2, 1.4, 1.1), [-4.6, 0, 0.6], [0, 0.9, 0]));
-  props.push(place(outcrop(r, 0.9, 1.0, 0.8), [5.4, 0, -0.4], [0, 0.2, 0]));
-  for (const [x, z, s] of [
-    [-5.1, 1.4, 0.55],
-    [-3.9, 1.9, 0.4],
-    [6.3, -0.9, 0.5],
-    [3.6, -0.3, 0.35],
-    [-6.8, 0.6, 0.6],
-    [7.2, 0.9, 0.55],
-  ] as const) {
-    props.push(place(rock(r, s * 0.6, '#4fae3f', 1, 0.2), [x, s * 0.27, z], [0, 0, 0], [1.2, 0.8, 1]));
-  }
-  // Background towers, hoodoos, boulders and trees (sides and behind).
-  const towers: [number, number, number, number][] = [
-    [-9, -8, 7, 1.6],
-    [-14, -22, 11, 2.2],
-    [10, -12, 8.5, 1.8],
-    [18, -30, 12, 2.6],
-    [-24, -40, 14, 3],
-    [6, -34, 9, 2],
-  ];
-  for (const [x, z, h, rad] of towers) props.push(place(sandstoneTower(r, h, rad), [x, -0.3, z]));
+  // Lower terrace: in front of the ledge and out to the right, ending at a cliff down to the
+  // plains a little way back, so the farmland spreads out below and beyond.
+  parts.push(place(box(60, 0.5, 44, '#c9a86a'), [-16, LOWER_Y - 0.25, 4]));
+  parts.push(cliffFace([-46, 26], [14, 26], PLAINS_Y - 0.5, LOWER_Y, { segs: 50, rows: 12, rough: 0.9, seed: 51, color: rockColor }));
+  parts.push(cliffFace([14, 26], [14, -18], PLAINS_Y - 0.5, LOWER_Y, { segs: 40, rows: 12, rough: 0.9, seed: 52, color: rockColor }));
+  parts.push(cliffFace([14, -18], [-46, -18], PLAINS_Y - 0.5, LOWER_Y, { segs: 50, rows: 12, rough: 0.9, seed: 53, color: rockColor }));
+  // Talus and junipers on the lower terrace.
   for (let i = 0; i < 18; i++) {
-    const side = i % 2 ? 1 : -1;
-    const x = side * range(r, 4.5, 16);
-    const z = range(r, -26, 6);
-    if (Math.abs(x) < 5 && z > -3) continue;
-    props.push(place(tree(r, range(r, 1.1, 1.9)), [x, 0, z]));
+    const x = range(r, 5, 13);
+    const z = range(r, -16, 20);
+    parts.push(place(rock(r, range(r, 0.4, 1.2), pick(r, BANDS), 0, 0.3), [x, LOWER_Y, z], [0, r() * 3, 0], [1, 0.6, 1]));
+  }
+  for (let i = 0; i < 12; i++) parts.push(place(juniper(r, range(r, 1.6, 2.6)), [range(r, 5, 13), LOWER_Y, range(r, -16, 22)], [0, r() * 6, 0]));
+  // Junipers along the lower terrace rim, for scale against the plains below.
+  for (let i = 0; i < 9; i++) parts.push(place(juniper(r, range(r, 1.8, 2.8)), [range(r, -12, 13), LOWER_Y, range(r, -17.5, -14)], [0, r() * 6, 0]));
+
+  // On the ledge: round desert shrubs in the cracks, a juniper at the far end, and loose blocks.
+  for (const [x, z, s] of [
+    [-5.2, 1.3, 0.28],
+    [-4.1, 2.0, 0.2],
+    [-1.8, 1.9, 0.18],
+    [1.6, 2.1, 0.22],
+    [2.9, 1.2, 0.26],
+  ] as const) {
+    parts.push(place(rock(r, s, pick(r, ['#6f9e4a', '#86a95a', '#5e8a44']), 1, 0.2), [x, s * 0.45, z], [0, 0, 0], [1.2, 0.8, 1]));
+  }
+  parts.push(place(juniper(r, 0.95), [4.05, 0, 2.15], [0, 1.2, 0]));
+  for (const [x, z, s] of [
+    [-3.4, 1.6, 0.3],
+    [-2.6, 2.0, 0.18],
+    [2.4, 1.9, 0.22],
+  ] as const) {
+    parts.push(place(rock(r, s, pick(r, BANDS), 0, 0.3), [x, s * 0.3, z], [0, r() * 3, 0], [1, 0.7, 1]));
+  }
+
+  // The plains: patchwork fields, a farmstead, fences, tree lines, a road and a creek.
+  const plains = new PlaneGeometry(700, 700, 70, 70);
+  plains.rotateX(-Math.PI / 2);
+  const pp = plains.getAttribute('position');
+  const groundY = (x: number, z: number) => PLAINS_Y + 1.6 * fbm(x * 0.01, z * 0.01, 91) * Math.min(1, Math.hypot(x, z) / 200);
+  for (let i = 0; i < pp.count; i++) pp.setY(i, groundY(pp.getX(i), pp.getZ(i)));
+  parts.push(paintFaces(flat(plains), (c) => (fbm(c.x * 0.02, c.z * 0.02, 93) > 0.1 ? '#7cc24a' : '#8fd052')));
+  const crops: Crop[] = ['wheat', 'wheat', 'green', 'plowed', 'corn', 'wheat'];
+  for (let i = 0; i < 7; i++) {
+    for (let j = 0; j < 6; j++) {
+      const x = -44 + i * 26 + range(r, -3, 3);
+      const z = -32 - j * 28 + range(r, -3, 3);
+      if (underMesa(x, z) || Math.hypot(x - FARM[0], z - FARM[1]) < 16) continue;
+      parts.push(field(x, z, range(r, 18, 23), range(r, 22, 27), 0.08, pick(r, crops), groundY, 14));
+    }
+  }
+  const [farmX, farmZ] = FARM;
+  const fy = groundY(farmX, farmZ);
+  parts.push(place(barn(), [farmX, fy, farmZ], [0, 0.55, 0], 8));
+  parts.push(place(silo(), [farmX + 8, fy, farmZ - 4], [0, 0, 0], 8));
+  parts.push(place(silo(), [farmX + 11.5, fy, farmZ - 2], [0, 0, 0], 6.5));
+  parts.push(place(farmhouse(), [farmX + 14, fy, farmZ + 9], [0, 0.5, 0], 7));
+  for (let k = 0; k < 7; k++) parts.push(place(hayBale(), [farmX + 6 + k * 3.5 + range(r, -1, 1), fy, farmZ + 16 + range(r, -2, 2)], [0, r(), 0], 1.1));
+  parts.push(fence(farmX - 10, farmZ + 12, farmX + 26, farmZ + 12, fy, 4));
+  parts.push(fence(farmX + 26, farmZ + 12, farmX + 26, farmZ - 14, fy, 4));
+  parts.push(treeRow(r, 20, -26, 20, -200, groundY, 6, 18));
+  parts.push(treeRow(r, 170, -24, 30, -24, groundY, 5, 14));
+  parts.push(treeRow(r, farmX - 12, farmZ + 16, farmX - 12, farmZ - 20, groundY, 5, 5));
+  parts.push(strip([[30, 30], [22, -20], [farmX + 4, farmZ + 12], [farmX + 30, -130], [farmX + 60, -230]], 1.6, '#d9c08a', (x, z) => groundY(x, z) + 0.05));
+  parts.push(strip([[200, 40], [150, -5], [110, -20], [90, -70], [120, -130], [100, -200], [140, -300]], 3, '#5ab4e6', (x, z) => groundY(x, z) + 0.04));
+
+  // Buttes and blue hills on the horizon.
+  for (const [x, z, rad, h] of [
+    [-40, -240, 26, 48],
+    [60, -300, 34, 60],
+    [160, -250, 22, 38],
+    [240, -180, 18, 30],
+    [-120, -200, 30, 55],
+  ] as const) {
+    parts.push(place(butte(r, rad, h), [x, PLAINS_Y, z]));
   }
   for (let i = 0; i < 8; i++) {
-    const side = i % 2 ? 1 : -1;
-    props.push(place(rock(r, range(r, 0.35, 0.8), '#e0955a', 0), [side * range(r, 3.6, 8), 0.2, range(r, -2, 5)]));
+    const g = new IcosahedronGeometry(1, 1);
+    jitter(g, 0.12, r);
+    parts.push(place(paint(flat(g), '#8fb6a0'), [range(r, -250, 350), PLAINS_Y - 8, range(r, -380, -330)], [0, r() * 3, 0], [range(r, 50, 90), range(r, 18, 30), 30]));
   }
-  return merge(props);
+  return merge(parts);
 }
-
-const TUFTS: [number, number, number][] = (() => {
-  const r = rng(4);
-  const out: [number, number, number][] = [];
-  for (let i = 0; i < 44; i++) {
-    const x = range(r, -6, 6);
-    const z = range(r, 0.3, 5.5);
-    if (Math.abs(x) < 1.1 && z < 1.8) continue;
-    out.push([x, 0, z]);
-  }
-  return out;
-})();
 
 export default function PlainsScene({ onReady }: SectionSceneProps) {
   const layout = wallLayout('skills');
   const world = useMemo(buildScene, []);
   useEffect(() => {
-    const off = registerAtmosphere('skills', { fog: new Fog('#cfefff', 30, 120), background: '#cfefff' });
+    const off = registerAtmosphere('skills', { fog: new Fog('#d6ecf5', 60, 420), background: '#d6ecf5' });
     onReady();
     return off;
   }, [onReady]);
 
   return (
     <group>
-      <hemisphereLight args={['#dff4ff', '#6bcb4b', 1.2]} />
+      <hemisphereLight args={['#dff4ff', '#c99a5a', 1.2]} />
       <directionalLight
-        position={[6, 14, 9]}
+        position={[9, 14, 10]}
         intensity={2.6}
-        color="#fff6e0"
+        color="#fff3dc"
         castShadow
         shadow-mapSize={shadowMap(1536)}
-        shadow-camera-left={-6}
-        shadow-camera-right={6}
-        shadow-camera-top={7}
+        shadow-camera-left={-7}
+        shadow-camera-right={7}
+        shadow-camera-top={8}
         shadow-camera-bottom={-3}
         shadow-camera-near={1}
-        shadow-camera-far={40}
+        shadow-camera-far={45}
         shadow-bias={-0.001}
         shadow-normalBias={0.04}
       />
-      <SkyDome top="#3f9fe6" horizon="#cfefff" bottom="#cfefff" />
+      <SkyDome top="#3f9fe6" horizon="#d6ecf5" bottom="#d6ecf5" radius={600} />
       <mesh geometry={world} material={toonVC()} receiveShadow castShadow />
-      <DriftingClouds section="skills" count={7} seed={21} area={{ x: [-60, 60], y: [11, 20], z: [-60, -25] }} />
-      <GrassTufts section="skills" spots={TUFTS} />
+      <DriftingClouds section="skills" count={8} seed={21} area={{ x: [-120, 220], y: [14, 30], z: [-220, -80] }} />
       <Holds layout={layout} style={style} />
       <Climber layout={layout} outfit={OUTFITS.plains} />
     </group>

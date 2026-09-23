@@ -27,31 +27,56 @@ export const gymWall: WallDef = {
   },
 };
 
-/** Sandstone strata: each band steps back a little at its base, which reads as a ledge line. */
-function plainsSurface(u: number, v: number): number {
-  const band = 0.55;
-  const strata = -0.06 * ((v / band) % 1);
+/** Huecos (wind-carved pockets) on the terrace face, (u, v, radius). */
+const HUECOS: [number, number, number][] = [
+  [-2.3, 2.1, 0.2],
+  [1.95, 3.25, 0.17],
+  [-0.3, 5.7, 0.26],
+  [2.7, 1.15, 0.18],
+  [-3.2, 3.8, 0.22],
+  [0.95, 0.55, 0.15],
+  [-4.6, 1.3, 0.28],
+  [3.4, 5.2, 0.24],
+];
+
+/**
+ * Terrace face (national-park sandstone): strata bands that each step back at their base, a deeper
+ * set-back tier above the route, two vertical cracks, wind-carved pockets and a broad bulge.
+ */
+function terraceSurface(u: number, v: number): number {
+  const band = 0.6;
+  const t = (((v / band) % 1) + 1) % 1;
+  const strata = -0.09 * t;
+  const tier = -0.35 * smoothstep(5.0, 5.35, v) + 0.12 * gauss(v - 5.05, 0.12);
   const cracks =
-    -0.13 * gauss(u + 1.55 - 0.08 * Math.sin(v * 2.3), 0.07) * (v > 0.2 && v < 4.1 ? 1 : 0) -
-    0.1 * gauss(u - 0.85 - 0.06 * Math.sin(v * 3.1), 0.06) * (v > 1.2 && v < 3.6 ? 1 : 0);
-  return 0.2 * fbm(u * 0.55, v * 0.55, 3) + strata + cracks;
+    -0.16 * gauss(u + 1.5 - 0.1 * Math.sin(v * 2.1), 0.07) * (v > 0.2 && v < 4.9 ? 1 : 0) -
+    0.12 * gauss(u - 1.1 - 0.08 * Math.sin(v * 2.7), 0.06) * (v > 1.0 && v < 4.6 ? 1 : 0);
+  let pockets = 0;
+  for (const [pu, pv, pr] of HUECOS) pockets -= 0.16 * Math.exp(-((u - pu) ** 2 + (v - pv) ** 2) / (pr * pr));
+  return 0.32 * fbm(u * 0.32, v * 0.32, 3) + 0.08 * fbm(u * 1.3, v * 1.3, 4) + strata + tier + cracks + pockets;
 }
 
-// Skills: sunny sandstone boulder, vertical.
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+// Skills: the upper tier of a tall sandstone terrace, starting from a ledge high above the plains.
+// The camera sits out over the drop, with the wall on the left and the farmland below on the right.
 export const plainsWall: WallDef = {
   section: 'skills',
   origin: new Vector3(0, 0, 0),
   right: new Vector3(1, 0, 0),
   up: new Vector3(0, 1, 0),
   normal: new Vector3(0, 0, 1),
-  surface: plainsSurface,
-  route: { uSpread: 0.5, vStart: 1.55, vEnd: 3.75, seed: 23, lane: [-0.35, 0.3] },
+  surface: terraceSurface,
+  route: { uSpread: 0.5, vStart: 1.55, vEnd: 3.85, seed: 23, lane: [-0.4, 0.35] },
   ground: 0,
   pelvisMin: 0.92,
   handOffsetV: 0,
   framing: {
-    landscape: { u: 0, v: 2.25, d: 0.4, yaw: -12, pitch: 7, fitW: 5.2, fitH: 5.0, fov: 38 },
-    portrait: { u: 0, v: 2.75, d: 0.4, yaw: -8, pitch: 7, fitW: 4.1, fitH: 4.6, fov: 40 },
+    landscape: { u: 1.5, v: 2.55, d: 0.4, yaw: 32, pitch: 11, fitW: 6.0, fitH: 5.0, fov: 38 },
+    portrait: { u: 0.9, v: 2.85, d: 0.4, yaw: 28, pitch: 10, fitW: 4.6, fitH: 5.0, fov: 40 },
   },
 };
 

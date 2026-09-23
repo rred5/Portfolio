@@ -4,9 +4,10 @@
 import { BufferAttribute, BufferGeometry, ConeGeometry, CylinderGeometry, Vector3, type ColorRepresentation } from 'three';
 import type { EnvId } from '../../config/sections';
 import { fbm } from '../../lib/noise';
-import { rng, range, type Rng } from '../../lib/rng';
+import { pick, rng, range, type Rng } from '../../lib/rng';
 import { smoothstep } from '../../lib/ease';
 import { box, cloud, cone, cylinder, flat, jitter, merge, paint, paintFaces, pine, place, rock, tree } from '../../render/geo';
+import { barn, farmhouse, fence, field, hayBale, silo, type Crop } from '../common/farm';
 import { boundaryWobble, islandRadius, REGIONS, type RegionDef } from './layout';
 
 const BOTTOM = -2.4;
@@ -31,7 +32,7 @@ export interface RegionBuild {
 function heightAt(env: EnvId, x: number, z: number, f: number): number {
   switch (env) {
     case 'plains':
-      return 0.42 + 0.24 * fbm(x * 0.3, z * 0.3, 5) - 0.14 * smoothstep(0.86, 1, f);
+      return 0.42 + 0.05 * fbm(x * 0.3, z * 0.3, 5) - 0.14 * smoothstep(0.9, 1, f);
     case 'glacier':
       return 0.75 + 0.3 * fbm(x * 0.3, z * 0.3, 8) - 0.1 * smoothstep(0.9, 1, f);
     case 'gym':
@@ -260,37 +261,134 @@ function cityDecor(def: RegionDef, r: Rng): Deco[] {
   return out;
 }
 
-function sandstoneTower(r: Rng, height: number, radius: number): BufferGeometry {
-  const parts: BufferGeometry[] = [];
-  let y = 0;
-  let rad = radius;
-  let k = 0;
-  while (y < height) {
-    const h = range(r, 0.35, 0.6);
-    const g = new CylinderGeometry(rad * range(r, 0.85, 1), rad, h, 7, 1);
-    jitter(g, rad * 0.1, r);
-    parts.push(place(paint(flat(g), k % 2 ? '#e8a15a' : '#d98a4a'), [0, y + h / 2, 0], [0, r() * 3, 0]));
-    y += h;
-    rad *= range(r, 0.82, 0.98);
-    k++;
+const STRATA = ['#e8a15a', '#d98446', '#f0b878', '#c96f3b'];
+
+/**
+ * A tier of the terrace: a prism over the polar sector a0..a1, f0..f1 of the island, from y0 up to
+ * y1, with strata-banded sides and a grassy top. The rim wobbles a little so it reads as rock.
+ */
+function terraceTier(r: Rng, a0: number, a1: number, f0: number, f1: number, y0: number, y1: number): BufferGeometry {
+  const n = 10;
+  const seed = Math.floor(r() * 1000);
+  const rim = (a: number, f: number): [number, number] => {
+    const R = islandRadius(a) * (f + 0.03 * fbm(a * 6, f * 6, seed));
+    return [Math.cos(a) * R, Math.sin(a) * R];
+  };
+  const outer: [number, number][] = [];
+  const inner: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    outer.push(rim(a, f1));
+    inner.push(rim(a, f0));
   }
-  return merge(parts);
+  const loop = [...outer, ...inner.reverse()];
+  const pos: number[] = [];
+  // Top: a strip between the outer and inner arcs.
+  for (let i = 0; i < n; i++) {
+    const o0 = outer[i]!;
+    const o1 = outer[i + 1]!;
+    const i0 = loop[loop.length - 1 - i]!;
+    const i1 = loop[loop.length - 2 - i]!;
+    pos.push(o0[0], y1, o0[1], i0[0], y1, i0[1], o1[0], y1, o1[1]);
+    pos.push(o1[0], y1, o1[1], i0[0], y1, i0[1], i1[0], y1, i1[1]);
+  }
+  // Sides: around the outline.
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i]!;
+    const b = loop[(i + 1) % loop.length]!;
+    pos.push(a[0], y0, a[1], b[0], y0, b[1], b[0], y1, b[1]);
+    pos.push(a[0], y0, a[1], b[0], y1, b[1], a[0], y1, a[1]);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.computeVertexNormals();
+  // Faces may be wound either way: paint both, and render the prism double-sided through flat
+  // normals that face out (fix any inward face).
+  const p = g.getAttribute('position');
+  const nrm = g.getAttribute('normal');
+  for (let t = 0; t < p.count; t += 3) {
+    const cx = (p.getX(t) + p.getX(t + 1) + p.getX(t + 2)) / 3;
+    const cz = (p.getZ(t) + p.getZ(t + 1) + p.getZ(t + 2)) / 3;
+    const ny = nrm.getY(t);
+    if (Math.abs(ny) > 0.5) {
+      if (ny < 0) swapWinding(p, t);
+      continue;
+    }
+    // Side faces point away from the prism's centre line.
+    const mid = rim((a0 + a1) / 2, (f0 + f1) / 2);
+    const out = (cx - mid[0]) * nrm.getX(t) + (cz - mid[1]) * nrm.getZ(t);
+    if (out < 0) swapWinding(p, t);
+  }
+  g.computeVertexNormals();
+  return paintFaces(g, (c, nn) => (nn.y > 0.5 ? (fbm(c.x, c.z, seed) > 0 ? '#9cc95a' : '#b8c96a') : STRATA[Math.abs(Math.floor((c.y - y0) / 0.28)) % STRATA.length]!));
 }
 
+function swapWinding(p: BufferAttribute | import('three').InterleavedBufferAttribute, t: number) {
+  const x = p.getX(t + 1);
+  const y = p.getY(t + 1);
+  const z = p.getZ(t + 1);
+  p.setXYZ(t + 1, p.getX(t + 2), p.getY(t + 2), p.getZ(t + 2));
+  p.setXYZ(t + 2, x, y, z);
+}
+
+/**
+ * Summer region: a tiered sandstone terrace over its outer-left third (national-park style), and
+ * farmland on the rest: wheat and green fields, a red barn, silo and farmhouse, fences, hay bales.
+ */
 function plainsDecor(def: RegionDef, r: Rng): Deco[] {
   const out: Deco[] = [];
-  const towers = scatter(def, r, 3, 0.35, 0.8, [], 2.4);
-  for (const s of towers) {
-    out.push({ geometry: place(sandstoneTower(r, range(r, 1.6, 2.6), range(r, 0.45, 0.7)), [s.x, s.y - 0.1, s.z]), a: s.a, f: s.f });
+  const A = (t: number) => def.a0 + (def.a1 - def.a0) * t;
+  // Terrace: three stacked tiers, each smaller, toward the island's edge.
+  const base = heightAt(def.env, 0, 0, 0.6) - 0.1;
+  const tiers: [number, number, number, number, number][] = [
+    [0.64, 0.92, 0.34, 0.97, 0.75],
+    [0.7, 0.9, 0.48, 0.93, 0.7],
+    [0.75, 0.87, 0.6, 0.89, 0.65],
+  ];
+  let y = base;
+  for (const [t0, t1, f0, f1, h] of tiers) {
+    out.push({ geometry: terraceTier(r, A(t0), A(t1), f0, f1, y, y + h), a: A((t0 + t1) / 2), f: (f0 + f1) / 2 });
+    y += h;
   }
-  for (const s of scatter(def, r, 4, 0.2, 0.95, towers, 1.2)) {
-    out.push({ geometry: place(rock(r, range(r, 0.3, 0.5), '#e0955a', 0), [s.x, s.y + 0.15, s.z]), a: s.a, f: s.f });
+  const yAt = (x: number, z: number) => heightAt(def.env, x, z, Math.hypot(x, z) / 9);
+  // Fields: a loose grid on the farm side, turned a little with the region.
+  const crops: Crop[] = ['wheat', 'wheat', 'green', 'plowed', 'corn'];
+  const fieldSpots: [number, number][] = [
+    [0.12, 0.42],
+    [0.12, 0.72],
+    [0.3, 0.5],
+    [0.3, 0.8],
+    [0.47, 0.35],
+    [0.47, 0.66],
+    [0.47, 0.9],
+  ];
+  for (const [t, f] of fieldSpots) {
+    const s = spotAt(def, A(t), f);
+    out.push({ geometry: field(s.x, s.z, range(r, 1.3, 1.7), range(r, 1.5, 2.0), -A(t) + Math.PI / 2 + range(r, -0.15, 0.15), pick(r, crops), yAt, 8), a: s.a, f });
   }
-  for (const s of scatter(def, r, 7, 0.15, 0.93, towers, 1.1)) {
-    out.push({ geometry: place(tree(r, range(r, 0.7, 1.0)), [s.x, s.y, s.z]), a: s.a, f: s.f });
+  // Farmstead near the middle of the farmland.
+  const farm = spotAt(def, A(0.3), 0.2);
+  const face = Math.atan2(-farm.x, -farm.z) + Math.PI;
+  out.push({ geometry: place(barn(), [farm.x, farm.y, farm.z], [0, face, 0], 0.95), a: farm.a, f: farm.f });
+  const siloAt = spotAt(def, A(0.4), 0.22);
+  out.push({ geometry: place(silo(), [siloAt.x, siloAt.y, siloAt.z], [0, 0, 0], 0.8), a: siloAt.a, f: siloAt.f });
+  const house = spotAt(def, A(0.16), 0.24);
+  out.push({ geometry: place(farmhouse(), [house.x, house.y, house.z], [0, face + 0.3, 0], 0.8), a: house.a, f: house.f });
+  for (let k = 0; k < 4; k++) {
+    const s = spotAt(def, A(0.22 + k * 0.05), 0.58 + 0.02 * k);
+    out.push({ geometry: place(hayBale(), [s.x, s.y, s.z], [0, r() * 3, 0], 0.13), a: s.a, f: s.f });
   }
-  for (const s of scatter(def, r, 14, 0.1, 0.95, towers, 0.5)) {
-    out.push({ geometry: place(paint(flat(new ConeGeometry(0.12, 0.35, 4)), '#3e9a3a'), [s.x, s.y + 0.15, s.z]), a: s.a, f: s.f });
+  const f0 = spotAt(def, A(0.08), 0.3);
+  const f1 = spotAt(def, A(0.55), 0.3);
+  out.push({ geometry: fence(f0.x, f0.z, f1.x, f1.z, f0.y, 0.7), a: A(0.3), f: 0.3 });
+  // Tree line along the terrace foot, and a few trees about the farm.
+  for (const s of scatter(def, r, 6, 0.3, 0.9, [farm, siloAt, house], 1.0)) {
+    if (s.a > A(0.6)) continue;
+    out.push({ geometry: place(tree(r, range(r, 0.6, 0.85)), [s.x, s.y, s.z]), a: s.a, f: s.f });
+  }
+  for (let k = 0; k < 5; k++) {
+    const s = spotAt(def, A(0.6), 0.3 + k * 0.13);
+    out.push({ geometry: place(tree(r, range(r, 0.6, 0.8)), [s.x, s.y, s.z]), a: s.a, f: s.f });
   }
   return out;
 }
