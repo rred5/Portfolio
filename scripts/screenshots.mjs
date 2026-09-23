@@ -52,7 +52,10 @@ for (const step of steps) {
   else if (step.focusSel) await page.locator(step.focusSel).first().focus();
   else if (step.key) await page.keyboard.press(step.key);
   else if (step.eval) logs.push(`eval: ${JSON.stringify(await page.evaluate(step.eval))}`);
-  else if (step.shot) await page.screenshot({ path: path.join(outDir, `${step.shot}.png`) });
+  else if (step.shot) {
+    const clip = step.clip ? { x: step.clip[0], y: step.clip[1], width: step.clip[2], height: step.clip[3] } : undefined;
+    await page.screenshot({ path: path.join(outDir, `${step.shot}.png`), clip });
+  }
 }
 
 await browser.close();

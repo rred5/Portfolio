@@ -114,8 +114,11 @@ export function Interaction() {
       pointer.moved = true;
     }
     if (!pointer.moved) return;
-    pointer.moved = false;
+    // Keep the flag while a transition runs, so hover is re-checked as soon as the new view settles.
     if (!s.ready || clock.active) return;
+    pointer.moved = false;
+    // No real pointer position yet (it defaults to the screen centre): nothing to hover.
+    if (!pointer.inside) return;
     if (pointer.type !== 'mouse' && pointer.type !== 'pen') return;
     const hit = pickAt(pointer.x, pointer.y, camera);
     const el = gl.domElement;

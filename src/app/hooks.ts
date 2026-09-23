@@ -3,7 +3,7 @@ import { sectionsInOrder, itemById } from '../content/query';
 import { SECTION_IDS } from '../config/sections';
 import { tagButtons } from '../state/registry';
 import { viewFromPath } from '../state/router';
-import { getState } from '../state/store';
+import { getState, useStore } from '../state/store';
 import type { Env } from '../state/types';
 import { preloadSceneModule } from './SectionHost';
 
@@ -39,12 +39,29 @@ export function useEnvironment() {
   }, []);
 }
 
-/** Browser back/forward runs the normal transitions (spec §3.1). */
+/**
+ * Browser back/forward runs the normal transitions (spec §3.1). If the history entry carries an item
+ * hash, that card is pinned again once the transition has landed.
+ */
 export function useRouterSync() {
   useEffect(() => {
-    const onPop = () => getState().navigate(viewFromPath(location.pathname), { history: 'none' });
+    let pendingPin = false;
+    const onPop = () => {
+      getState().navigate(viewFromPath(location.pathname), { history: 'none' });
+      if (getState().transition) pendingPin = true;
+      else if (!getState().pinnedItem) pinFromHash();
+    };
+    const unsubscribe = useStore.subscribe((s) => {
+      if (pendingPin && !s.transition) {
+        pendingPin = false;
+        pinFromHash();
+      }
+    });
     window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('popstate', onPop);
+    };
   }, []);
 }
 

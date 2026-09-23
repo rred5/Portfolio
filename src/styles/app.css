@@ -164,13 +164,18 @@
   position: absolute;
   top: max(12px, env(safe-area-inset-top));
   left: 0;
-  right: calc(var(--card-w) + var(--gutter) * 2);
+  right: 0;
   margin: 0 auto;
   width: max-content;
-  max-width: calc(100% - 420px);
+  /* Page-centred between the name pill and the text button. */
+  max-width: calc(100% - 460px);
   height: 40px;
-  display: flex;
-  align-items: center;
+  /* Room for the text stroke, which paints outside the glyph box and was clipped by overflow. */
+  padding: 0 10px;
+  box-sizing: border-box;
+  display: block;
+  line-height: 40px;
+  text-align: center;
   font-family: var(--font-display);
   font-weight: 400;
   font-size: 26px;
@@ -181,12 +186,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
-
-.overlay[data-nav='rail'] .topbar__title {
-  left: calc(var(--rail-w) + var(--gutter));
-}
-
 
 /* ---------------------------------------------------------------- Anchored labels & tags */
 
@@ -851,6 +852,7 @@
   line-height: 36px;
   text-align: center;
   font-size: 19px;
+  padding: 0 6px;
   -webkit-text-stroke-width: 4px;
 }
 

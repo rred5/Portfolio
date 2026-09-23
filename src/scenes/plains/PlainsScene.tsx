@@ -6,30 +6,28 @@ import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { smoothstep } from '../../lib/ease';
 import { fbm } from '../../lib/noise';
-import { rng, range, type Rng } from '../../lib/rng';
+import { pick, rng, range, type Rng } from '../../lib/rng';
 import { box, flat, jitter, merge, paint, paintFaces, place, rock, tree } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
 import { toonVC } from '../../render/toon';
 import { registerAtmosphere } from '../atmosphere';
 import { DriftingClouds, GrassTufts } from '../common/ambient';
 import { wallLayout } from '../layouts';
+import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
 import { irregularRoll, reliefMesh } from '../wall/surface';
 import { plainsWall } from '../walls';
 
 const BANDS = ['#e8a15a', '#d98a4a', '#f0b878', '#dd9552'];
 
-function sandstoneHold(r: Rng, w: number, color: string): BufferGeometry {
-  const g = new IcosahedronGeometry(1, 0);
-  jitter(g, 0.2, r);
-  return place(paint(flat(g), color), [0, 0, w * 0.25], [0, 0, 0], [w, w * 0.32, w * 0.45]);
-}
+const CHALK = '#fffaf0';
 
+/** Sandstone features: rounded edges and jugs in the rock colour, chalked where hands go. */
 const style: HoldStyle = {
-  interactive: (r) => sandstoneHold(r, 0.17, '#f6c48a'),
-  support: (r) => sandstoneHold(r, range(r, 0.1, 0.13), '#efb679'),
-  decor: (r) => (r() < 0.5 ? sandstoneHold(r, range(r, 0.07, 0.12), '#f0b878') : place(rock(r, 0.05, '#9cb86a', 0, 0.3), [0, 0, 0], [0, 0, 0], [1.4, 1, 0.3])),
-  decorCount: 20,
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, edge: 1 }), size: 0.22, color: '#f2bd82', top: CHALK, topAmount: 0.55, rough: 0.14 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1, sloper: 1 }), size: range(r, 0.15, 0.19), color: '#e8a866', top: CHALK, topAmount: 0.4, rough: 0.14 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 3, sloper: 2 }), size: range(r, 0.1, 0.2), color: pick(r, BANDS), top: CHALK, topAmount: 0.08, rough: 0.16 }),
+  decorCount: 14,
   decorArea: { u0: -2.6, u1: 2.6, v0: 0.4, v1: 4.1 },
 };
 

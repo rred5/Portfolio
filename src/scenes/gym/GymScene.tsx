@@ -6,6 +6,7 @@ import {
   CylinderGeometry,
   Fog,
   IcosahedronGeometry,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshToonMaterial,
@@ -16,37 +17,34 @@ import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { rng, range, pick, type Rng } from '../../lib/rng';
-import { box, flat, jitter, merge, paint, place } from '../../render/geo';
+import { box, flat, merge, paint, place } from '../../render/geo';
 import { toonRamp, toonVC } from '../../render/toon';
 import { noInk } from '../../state/registry';
 import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
 import { wallLayout, type WallLayout } from '../layouts';
 import { canvasTexture, inWall } from '../wall/helpers';
+import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
 import type { Spot } from '../wall/route';
+import { toWorld } from '../wall/types';
 
 const HOLD_COLORS = ['#e8e2d4', '#c9c3b6', '#6a6a74', '#a3a3ad', '#d8c6a8'];
 const LED = { start: '#35d05a', hand: '#29c6f0', finish: '#ff3fa4' };
 
+/** Plastic hold: smooth, with a light dusting of chalk on top. */
 function kilterHold(r: Rng, size: number, color: string): BufferGeometry {
-  const kind = Math.floor(r() * 4);
-  const scale: [number, number, number] =
-    kind === 0 ? [1, 0.38, 0.45] : kind === 1 ? [0.9, 0.6, 0.7] : kind === 2 ? [0.42, 1, 0.5] : [0.95, 0.75, 0.38];
-  const g = new IcosahedronGeometry(size, 0);
-  jitter(g, size * 0.18, r);
-  return place(paint(flat(g), color), [0, 0, size * scale[2] * 0.5], [0, 0, 0], scale);
+  const kind = pickKind(r, { jug: 2, crimp: 2, pinch: 1, sloper: 1 });
+  return sculptHold(r, { kind, size, color, top: '#ffffff', topAmount: 0.2, rough: 0.08, vary: 0.04 });
 }
 
 const kilterStyle: HoldStyle = {
-  interactive: (r) => {
-    const g = new IcosahedronGeometry(0.1, 1);
-    jitter(g, 0.012, r);
-    return place(paint(flat(g), '#f2eee4'), [0, 0, 0.035], [0, 0, 0], [1.25, 0.8, 0.6]);
-  },
-  support: (r) => kilterHold(r, 0.08, pick(r, HOLD_COLORS)),
-  decor: (r) => kilterHold(r, range(r, 0.05, 0.085), pick(r, HOLD_COLORS)),
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, crimp: 1 }), size: 0.2, color: '#f2eee4', top: '#ffffff', topAmount: 0.3, rough: 0.08 }),
+  support: (r) => kilterHold(r, range(r, 0.13, 0.16), pick(r, HOLD_COLORS)),
+  decor: (r) => kilterHold(r, range(r, 0.08, 0.15), pick(r, HOLD_COLORS)),
   glow: (i, n) => (i === 0 ? LED.start : i === n - 1 ? LED.finish : LED.hand),
+  // Kilter marks problems with LED rings, not tape.
+  tape: false,
   decorSpots: (layout: WallLayout, r: Rng) => {
     const avoid: Spot[] = [...layout.route.slots, ...layout.route.supports];
     const out: Spot[] = [];
@@ -54,14 +52,63 @@ const kilterStyle: HoldStyle = {
       for (let v = 0.12; v <= 3.55; v += 0.2) {
         const s = { u: u + (Math.round(v / 0.2) % 2 ? 0.1 : 0), v };
         if (Math.abs(s.u) > 1.75) continue;
-        if (avoid.some((a) => Math.hypot(a.u - s.u, a.v - s.v) < 0.22)) continue;
-        if (r() < 0.3) out.push(s);
+        if (avoid.some((a) => Math.hypot(a.u - s.u, a.v - s.v) < 0.26)) continue;
+        if (out.some((a) => Math.hypot(a.u - s.u, a.v - s.v) < 0.25)) continue;
+        if (r() < 0.42) out.push(s);
       }
     }
     return out;
   },
-  led: true,
 };
+
+/** Board face: plywood with grain, panel seams and the T-nut grid, drawn once into a texture. */
+function drawBoard(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const r = rng(77);
+  ctx.fillStyle = '#d9a566';
+  ctx.fillRect(0, 0, w, h);
+  // Panel tones and grain.
+  const tones = ['#d9a566', '#d29e5f', '#dcab6c'];
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      ctx.fillStyle = tones[(i + j) % 3]!;
+      ctx.fillRect((i * w) / 3, (j * h) / 3, w / 3, h / 3);
+    }
+  }
+  ctx.strokeStyle = 'rgba(150, 100, 50, 0.22)';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 70; k++) {
+    const y = r() * h;
+    const x = r() * w;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + 40, y + (r() - 0.5) * 10, x + 90, y + (r() - 0.5) * 10, x + 140 + r() * 80, y);
+    ctx.stroke();
+  }
+  // T-nuts every 20 cm, rows offset.
+  ctx.fillStyle = '#6e4c2a';
+  const pxPerM = w / 3.81;
+  for (let v = 0.1; v < 3.75; v += 0.2) {
+    const off = Math.round(v / 0.2) % 2 ? 0.1 : 0;
+    for (let u = -1.8 + off; u <= 1.8; u += 0.2) {
+      ctx.beginPath();
+      ctx.arc((u + 1.905) * pxPerM, h - v * (h / 3.75), 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Panel seams.
+  ctx.strokeStyle = '#8c6438';
+  ctx.lineWidth = 3;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo((i * w) / 3, 0);
+    ctx.lineTo((i * w) / 3, h);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, (i * h) / 3);
+    ctx.lineTo(w, (i * h) / 3);
+    ctx.stroke();
+  }
+}
 
 function drawMural(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillStyle = '#2b2d42';
@@ -138,8 +185,6 @@ function buildRoom(layout: WallLayout) {
       parts.push(inWall(def, place(box(1.27, 1.25, 0.06, panelTones[(i + j) % 3]!), [-1.27 + i * 1.27, 0.62 + j * 1.25, -0.03])));
     }
   }
-  for (const u of [-0.635, 0.635]) parts.push(inWall(def, place(box(0.012, 3.75, 0.01, '#9c7446'), [u, 1.87, 0.002])));
-  for (const v of [1.245, 2.495]) parts.push(inWall(def, place(box(3.81, 0.012, 0.01, '#9c7446'), [0, v, 0.002])));
   for (const u of [-1.96, 1.96]) parts.push(inWall(def, place(box(0.12, 3.9, 0.16, '#2b2d42'), [u, 1.87, -0.05])));
   parts.push(inWall(def, place(box(4.04, 0.14, 0.16, '#2b2d42'), [0, 3.8, -0.05])));
   // Kickboard (vertical, below the board).
@@ -159,15 +204,15 @@ function buildRoom(layout: WallLayout) {
   parts.push(place(box(16, 0.3, 14, '#2a2d40'), [0, 6.2, 5]));
 
   // Neighbouring bouldering wall on the right, with coloured holds.
-  const nb = place(box(3.4, 4.6, 0.25, '#6c7a96'), [4.6, 2.3, 0.1], [0.12, -0.25, 0]);
-  parts.push(nb);
+  // Holds are built in the panel's own frame (front face at z = 0.125) and moved with it, so they
+  // sit on the face whatever its angle.
+  const nbParts: BufferGeometry[] = [box(3.4, 4.6, 0.25, '#6c7a96')];
   const nbColors = ['#ff4fa3', '#35d05a', '#ffd23f', '#29c6f0', '#8f5bff'];
   for (let i = 0; i < 26; i++) {
-    const hx = range(r, 3.2, 6.0);
-    const hy = range(r, 0.5, 4.3);
-    const g = kilterHold(r, range(r, 0.06, 0.11), pick(r, nbColors));
-    parts.push(place(g, [hx, hy, 0.28 + (4.6 - hy) * 0.1 - (hx - 4.6) * 0.25], [0.12, -0.25, 0]));
+    const g = kilterHold(r, range(r, 0.1, 0.18), pick(r, nbColors));
+    nbParts.push(place(g, [range(r, -1.5, 1.5), range(r, -1.9, 2.0), 0.125], [0, 0, range(r, -0.6, 0.6)]));
   }
+  parts.push(place(merge(nbParts), [4.6, 2.3, 0.1], [0.12, -0.25, 0]));
 
   // Crash mat pile and chalk bucket.
   parts.push(place(box(1.6, 0.35, 1.1, '#e4572e'), [-3.4, 0.2, 2.6], [0, 0.2, 0]));
@@ -212,8 +257,13 @@ export default function GymScene({ onReady }: SectionSceneProps) {
       noInk.add(m);
       return m;
     });
-    return { planes: [mural, mural2, p1, p2], lamps, bulbs };
-  }, []);
+    // Board face, laid over the panel boxes in wall space.
+    const board = texturedPlane(3.81, 3.75, drawBoard, 1024);
+    board.applyMatrix4(new Matrix4().makeBasis(layout.def.right, layout.def.up, layout.def.normal));
+    board.position.copy(toWorld(layout.def, 0, 1.875, 0.002));
+    board.receiveShadow = true;
+    return { planes: [board, mural, mural2, p1, p2], lamps, bulbs };
+  }, [layout]);
 
   useEffect(() => {
     const off = registerAtmosphere('projects', { fog: new Fog('#1f2133', 14, 42), background: '#1f2133' });

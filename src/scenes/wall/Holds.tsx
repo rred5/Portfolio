@@ -1,17 +1,19 @@
-// Holds on a wall (spec §8): interactive holds with the shared cue (tape + pulsing glow), hover and
-// pinned states, plus support and decorative holds merged into one mesh.
+// Holds on a wall (spec §8): interactive holds with the shared cue (tape + a pulsing glow ring on the
+// wall around the hold), hover and pinned states, plus support and decorative holds merged into one
+// mesh.
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import {
-  BackSide,
+  BufferAttribute,
+  BufferGeometry,
   Color,
   Group,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  ShaderMaterial,
   SphereGeometry,
   Vector3,
-  type BufferGeometry,
   type MeshToonMaterial,
 } from 'three';
 import { motion } from '../../config/motion';
@@ -38,8 +40,6 @@ export interface HoldStyle {
   decorSpots?: (layout: WallLayout, r: Rng) => Spot[];
   decorCount?: number;
   decorArea?: { u0: number; u1: number; v0: number; v1: number };
-  /** Extra geometry at each position (e.g. Kilter LED dots), lit for interactive holds. */
-  led?: boolean;
   /** Tape under each interactive hold (default true). */
   tape?: boolean;
   /** Depth offset of holds from the surface. */
@@ -82,12 +82,81 @@ function scatter(layout: WallLayout, r: Rng, count: number, area: { u0: number; 
   return out;
 }
 
+/**
+ * Glow ring drawn on the wall around a hold: a small polar grid that follows the wall relief, so it
+ * never floats or cuts into the rock, shaded as a soft ring (a Kilter-style LED ring on the board).
+ */
+function glowDisc(def: WallDef, u: number, v: number, radius: number): BufferGeometry {
+  const rings = 5;
+  const segs = 32;
+  const pos: number[] = [];
+  const rad: number[] = [];
+  const pt = (i: number, j: number) => {
+    const rr = (i / rings) * radius;
+    const a = (j / segs) * Math.PI * 2;
+    // Lifted a few cm: the relief mesh is a coarse triangulation of the surface function.
+    const p = toWorld(def, u + Math.cos(a) * rr, v + Math.sin(a) * rr, 0.04);
+    return [p.x, p.y, p.z, i / rings] as const;
+  };
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const a = pt(i, j);
+      const b = pt(i + 1, j);
+      const c = pt(i + 1, j + 1);
+      const d = pt(i, j + 1);
+      for (const q of [a, b, c, a, c, d]) {
+        pos.push(q[0], q[1], q[2]);
+        rad.push(q[3]);
+      }
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('aRadius', new BufferAttribute(new Float32Array(rad), 1));
+  return g;
+}
+
+const glowVert = /* glsl */ `
+attribute float aRadius;
+varying float vR;
+void main() {
+  vR = aRadius;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const glowFrag = /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform float uHot;
+varying float vR;
+void main() {
+  float ring = smoothstep(0.5, 0.74, vR) * (1.0 - smoothstep(0.8, 1.0, vR));
+  float fill = (1.0 - smoothstep(0.2, 0.85, vR)) * 0.45 * uHot;
+  float a = clamp((ring + fill) * uOpacity, 0.0, 1.0);
+  gl_FragColor = vec4(uColor, a);
+}
+`;
+
+function glowMaterial(color: Color): ShaderMaterial {
+  return new ShaderMaterial({
+    vertexShader: glowVert,
+    fragmentShader: glowFrag,
+    uniforms: { uColor: { value: color }, uOpacity: { value: 0.7 }, uHot: { value: 0 } },
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
+  });
+}
+
 interface InteractiveHold {
   id: string;
   mesh: Mesh;
   material: MeshToonMaterial;
-  halo: Mesh;
-  haloMat: MeshBasicMaterial;
+  ring: Mesh;
+  ringMat: ShaderMaterial;
   hit: Mesh;
   glow: Color;
   scale: number;
@@ -118,16 +187,15 @@ export function Holds({ layout, style }: { layout: WallLayout; style: HoldStyle 
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       const glow = new Color(style.glow ? style.glow(i, n) : CUE);
-      const haloMat = new MeshBasicMaterial({ color: glow, transparent: true, opacity: 0.5, side: BackSide, depthWrite: false });
-      const halo = new Mesh(local, haloMat);
-      halo.scale.setScalar(1.45);
-      mesh.add(halo);
-      noInk.add(halo);
+      const ringMat = glowMaterial(glow);
+      const ring = new Mesh(glowDisc(def, slot.u, slot.v, (g.boundingSphere?.radius ?? 0.1) * 1.35 + 0.05), ringMat);
+      ring.renderOrder = 1;
+      noInk.add(ring);
       const hit = new Mesh(hitGeo, hitMat);
       hit.position.copy(center);
-      group.add(mesh, hit);
+      group.add(ring, mesh, hit);
       holdPositions.set(items[i]!.id, center.clone());
-      return { id: items[i]!.id, mesh, material, halo, haloMat, hit, glow, scale: 1, hot: 0 };
+      return { id: items[i]!.id, mesh, material, ring, ringMat, hit, glow, scale: 1, hot: 0 };
     });
 
     // Support + decorative holds, tape strips and LED dots: one static mesh.
@@ -138,14 +206,6 @@ export function Holds({ layout, style }: { layout: WallLayout; style: HoldStyle 
     for (const s of decorSpots) staticParts.push(onWall(def, style.decor(r, s), s.u, s.v, lift, (r() - 0.5) * 2));
     if (style.tape !== false) {
       for (const slot of route.slots) staticParts.push(onWall(def, place(box(0.2, 0.045, 0.012, CUE), [0, 0, 0.006]), slot.u, slot.v - 0.16, 0, (r() - 0.5) * 0.15));
-    }
-    if (style.led) {
-      const all = [...decorSpots, ...route.supports];
-      for (const s of all) staticParts.push(onWall(def, place(box(0.035, 0.035, 0.012, '#3a3a40'), [0, 0, 0.006]), s.u + 0.09, s.v + 0.09, 0));
-      route.slots.forEach((s, i) => {
-        const c = style.glow ? style.glow(i, n) : CUE;
-        staticParts.push(onWall(def, place(box(0.045, 0.045, 0.016, c), [0, 0, 0.008]), s.u + 0.1, s.v + 0.1, 0));
-      });
     }
     const staticMesh = new Mesh(merge(staticParts), toonVC());
     staticMesh.castShadow = true;
@@ -166,7 +226,7 @@ export function Holds({ layout, style }: { layout: WallLayout; style: HoldStyle 
       for (const p of regs) pickables.delete(p);
       for (const h of built.holds) {
         outlineTargets.delete(`hold:${h.id}`);
-        noInk.delete(h.halo);
+        noInk.delete(h.ring);
       }
     };
   }, [built, def.section]);
@@ -183,10 +243,11 @@ export function Holds({ layout, style }: { layout: WallLayout; style: HoldStyle 
       h.hot += ((active ? 1 : 0) - h.hot) * k;
       h.scale = 1 + 0.08 * h.hot;
       h.mesh.scale.setScalar(h.scale);
-      h.material.color.copy(white).lerp(h.glow, 0.35 * h.hot);
-      h.material.emissive.copy(h.glow).multiplyScalar(0.18 * h.hot);
-      const pulse = reduced ? 0.5 : 0.38 + 0.22 * Math.sin((t * Math.PI * 2) / motion.holdPulsePeriod + h.hit.position.x);
-      h.haloMat.opacity = pulse * (1 - h.hot) + 0.75 * h.hot;
+      h.material.color.copy(white).lerp(h.glow, 0.3 * h.hot);
+      h.material.emissive.copy(h.glow).multiplyScalar(0.12 * h.hot);
+      const pulse = reduced ? 0.85 : 0.75 + 0.2 * Math.sin((t * Math.PI * 2) / motion.holdPulsePeriod + h.hit.position.x);
+      h.ringMat.uniforms.uOpacity!.value = pulse * (1 - h.hot) + h.hot;
+      h.ringMat.uniforms.uHot!.value = h.hot;
     }
   });
 

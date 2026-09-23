@@ -56,7 +56,7 @@ export default function App({ initial }: { initial: ViewId }) {
       <Canvas
         className="app__canvas"
         flat
-        shadows
+        shadows="percentage"
         dpr={[1, lowPower ? 1.5 : 2]}
         gl={{ antialias: false, stencil: false, powerPreference: 'high-performance' }}
         camera={{ fov: 35, near: 0.1, far: 700, position: [0, 20, 20] }}

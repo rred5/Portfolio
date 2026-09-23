@@ -17,7 +17,7 @@ import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { fbm } from '../../lib/noise';
-import { rng, range, type Rng } from '../../lib/rng';
+import { pick, rng, range, type Rng } from '../../lib/rng';
 import { flat, jitter, merge, paint, paintFaces, place, rock } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
 import { toonVC } from '../../render/toon';
@@ -26,6 +26,7 @@ import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
 import { Particles } from '../common/ambient';
 import { wallLayout } from '../layouts';
+import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
 import { edgeRoll, reliefMesh } from '../wall/surface';
 import { coastWall } from '../walls';
@@ -39,14 +40,14 @@ function ledge(r: Rng, w: number, color: string): BufferGeometry {
   return place(paint(flat(g), color), [0, 0, w * 0.18], [0, 0, 0], [w, w * 0.22, w * 0.38]);
 }
 
+const CHALK = '#fff6ea';
+
+/** Sea-cliff edges and flakes in the rock colour, chalked where hands go. */
 const style: HoldStyle = {
-  interactive: (r) => ledge(r, 0.2, '#e8b890'),
-  support: (r) => ledge(r, range(r, 0.12, 0.16), '#d9a07a'),
-  decor: (r) =>
-    r() < 0.4
-      ? place(paint(flat(new CircleGeometry(0.06, 6)), '#4a2e28'), [0, 0, 0.01], [0, 0, 0], [1.4, 1, 1])
-      : ledge(r, range(r, 0.08, 0.14), '#d49a76'),
-  decorCount: 22,
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1 }), size: 0.24, color: '#dfa47c', top: CHALK, topAmount: 0.55, rough: 0.14 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, crimp: 1 }), size: range(r, 0.15, 0.19), color: '#cf916b', top: CHALK, topAmount: 0.4, rough: 0.14 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 3, sloper: 1 }), size: range(r, 0.12, 0.22), color: pick(r, ROCK), top: CHALK, topAmount: 0.06, rough: 0.16 }),
+  decorCount: 14,
   decorArea: { u0: -2.7, u1: 2.7, v0: 0.4, v1: 4.2 },
 };
 

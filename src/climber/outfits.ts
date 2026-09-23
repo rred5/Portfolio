@@ -10,6 +10,8 @@ export interface Outfit {
   legs: 'shorts' | 'long';
   shoes: string;
   sole: string;
+  /** Harness webbing colour. */
+  harness: string;
   chalkBag?: string;
   helmet?: string;
   gloves?: string;
@@ -29,8 +31,9 @@ export const OUTFITS: Record<EnvId, Outfit> = {
     pants: '#2b2d42',
     legs: 'shorts',
     shoes: '#ff4fa3',
-    sole: '#151515',
-    chalkBag: '#ffb400',
+    sole: '#2b2d42',
+    harness: '#ffb400',
+    chalkBag: '#6b4eff',
   },
   plains: {
     skin: SKIN,
@@ -40,8 +43,9 @@ export const OUTFITS: Record<EnvId, Outfit> = {
     pants: '#3a5a8c',
     legs: 'long',
     shoes: '#6b4eff',
-    sole: '#151515',
-    chalkBag: '#ffffff',
+    sole: '#2b2d42',
+    harness: '#2b2d42',
+    chalkBag: '#ffd23f',
   },
   glacier: {
     skin: SKIN,
@@ -52,6 +56,7 @@ export const OUTFITS: Record<EnvId, Outfit> = {
     legs: 'long',
     shoes: '#6b4a2e',
     sole: '#8a8f9c',
+    harness: '#3a3a48',
     helmet: '#ffd23f',
     gloves: '#3a3a48',
     axes: true,
@@ -65,7 +70,8 @@ export const OUTFITS: Record<EnvId, Outfit> = {
     pants: '#e8c07a',
     legs: 'shorts',
     shoes: '#ff4fa3',
-    sole: '#151515',
-    chalkBag: '#151515',
+    sole: '#2b2d42',
+    harness: '#ffd23f',
+    chalkBag: '#ff5a36',
   },
 };

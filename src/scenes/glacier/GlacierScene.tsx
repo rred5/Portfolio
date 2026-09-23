@@ -18,7 +18,7 @@ import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
 import { smoothstep } from '../../lib/ease';
 import { fbm } from '../../lib/noise';
-import { rng, range, type Rng } from '../../lib/rng';
+import { pick, rng, range, type Rng } from '../../lib/rng';
 import { flat, jitter, merge, paint, paintFaces, place } from '../../render/geo';
 import { SkyDome } from '../../render/sky';
 import { toonVC } from '../../render/toon';
@@ -28,6 +28,7 @@ import { registerAtmosphere } from '../atmosphere';
 import { Particles } from '../common/ambient';
 import { wallLayout } from '../layouts';
 import { inWall } from '../wall/helpers';
+import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
 import { irregularRoll, reliefMesh } from '../wall/surface';
 import { toWorld } from '../wall/types';
@@ -41,19 +42,17 @@ function iceBump(r: Rng, size: number, color: string): BufferGeometry {
   return place(paint(flat(g), color), [0, 0, size * 0.3], [0, 0, 0], [1.3, 0.8, 0.65]);
 }
 
+/** Ice bulges with a snow cap; the axe placements get a chipped pick mark. */
 const style: HoldStyle = {
   interactive: (r) =>
     merge([
-      iceBump(r, 0.14, '#c8f2ff'),
+      sculptHold(r, { kind: pickKind(r, { blob: 1, sloper: 1 }), size: 0.26, color: '#c8f2ff', top: '#ffffff', topAmount: 0.45, rough: 0.2 }),
       // Chipped mark where the pick lands.
-      place(paint(flat(new TetrahedronGeometry(0.04)), '#3e8fd6'), [0, 0.02, 0.12], [0.6, 0.3, 0]),
+      place(paint(flat(new TetrahedronGeometry(0.035)), '#5aa8e0'), [0, 0.02, 0.07], [0.6, 0.3, 0]),
     ]),
-  support: (r) => place(iceBump(r, 0.09, '#b4ebfd'), [0, 0, 0], [0, 0, 0], [1.2, 0.6, 1]),
-  decor: (r) =>
-    r() < 0.45
-      ? place(paint(flat(new ConeGeometry(0.07, 0.2, 5)), '#5a5f7a'), [0, 0, 0.08], [Math.PI / 2, 0, 0])
-      : iceBump(r, range(r, 0.06, 0.1), '#a8e4fa'),
-  decorCount: 16,
+  support: (r) => sculptHold(r, { kind: 'blob', size: range(r, 0.15, 0.2), color: '#b4ebfd', top: '#ffffff', topAmount: 0.4, rough: 0.2 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { blob: 2, sloper: 1 }), size: range(r, 0.12, 0.26), color: pick(r, ICE), top: '#ffffff', topAmount: 0.3, rough: 0.22 }),
+  decorCount: 12,
   decorArea: { u0: -2.8, u1: 2.8, v0: 0.5, v1: 4.9 },
 };
 

@@ -4,16 +4,19 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import {
+  ConeGeometry,
   CylinderGeometry,
   Group,
-  IcosahedronGeometry,
   InstancedMesh,
+  LatheGeometry,
   Matrix4,
   Mesh,
   Object3D,
   Quaternion,
   SphereGeometry,
   TetrahedronGeometry,
+  TorusGeometry,
+  Vector2,
   Vector3,
   type BufferGeometry,
   type Material,
@@ -54,41 +57,131 @@ const copyPose = (p: Pose | PoseState): PoseState => ({
   rf: { ...p.rf },
 });
 
-const unitCyl = new CylinderGeometry(1, 1, 1, 7, 1);
-const unitBall = flat(new IcosahedronGeometry(1, 1));
+// Body parts are smooth-shaded (unlike the faceted scenery) so the ink pass only draws silhouettes
+// and creases, not stripes along every facet of a thin limb.
+/** Open tapered tube, unit length along +Y (centred), radius 1 at the root end and `tip` at the other. */
+const tube = (tip: number) => new CylinderGeometry(tip, 1, 1, 12, 1, true);
+const GEO = {
+  upperArm: tube(0.86),
+  forearm: tube(0.78),
+  sleeve: tube(0.92),
+  thigh: tube(0.8),
+  shin: tube(0.72),
+  neck: tube(0.9),
+  ball: new SphereGeometry(1, 14, 10),
+};
+
+const lathe = (profile: [number, number][], segments = 18) =>
+  new LatheGeometry(
+    profile.map(([x, y]) => new Vector2(x, y)),
+    segments,
+  );
+
+/** Torso from the pelvis (y = 0) to the shoulders (y = 1): waist, chest, rounded shoulders. */
+const TORSO = lathe([
+  [0.01, 0],
+  [0.8, 0],
+  [0.84, 0.16],
+  [0.8, 0.36],
+  [0.88, 0.58],
+  [1, 0.76],
+  [0.96, 0.9],
+  [0.72, 0.98],
+  [0.3, 1.01],
+  [0.01, 1.02],
+]);
+/** Shorts / trouser top around the pelvis. */
+const SHORTS = lathe([
+  [0.01, -0.13],
+  [0.86, -0.13],
+  [1, -0.04],
+  [0.98, 0.08],
+  [0.9, 0.14],
+  [0.01, 0.14],
+]);
+/** Belt / leg loop ring, lying in the XZ plane. */
+const RING = new TorusGeometry(1, 0.12, 6, 22).rotateX(Math.PI / 2);
+
 const Y = new Vector3(0, 1, 0);
 const q = new Quaternion();
+const segDir = new Vector3();
 const tmp = new Vector3();
 const tmp2 = new Vector3();
+const tmp3 = new Vector3();
 const basis = new Matrix4();
 
+/** Stretches a unit Y-tube from a to b with the given root radius. */
 function segment(mesh: Object3D, a: Vector3, b: Vector3, r: number) {
-  tmp.subVectors(b, a);
-  const len = tmp.length();
+  segDir.subVectors(b, a);
+  const len = segDir.length();
   mesh.position.addVectors(a, b).multiplyScalar(0.5);
-  q.setFromUnitVectors(Y, tmp.divideScalar(len || 1));
+  q.setFromUnitVectors(Y, segDir.divideScalar(len || 1));
   mesh.quaternion.copy(q);
   mesh.scale.set(r, len, r);
 }
 
-function makeMesh(geo: BufferGeometry, mat: Material, parent: Group) {
+function makeMesh(geo: BufferGeometry, mat: Material, parent: Object3D) {
   const m = new Mesh(geo, mat);
   m.castShadow = true;
   parent.add(m);
   return m;
 }
 
+/** Smooth, non-indexed copy (keeps the smooth normals) so painted parts can be merged. */
+function smooth(g: BufferGeometry): BufferGeometry {
+  const out = g.index ? g.toNonIndexed() : g;
+  out.deleteAttribute('uv');
+  return out;
+}
+
+/** Climbing shoe: toe points into the wall (−z), heel out, rubber rand and sole underneath. */
+function shoeGeometry(o: Outfit): BufferGeometry {
+  const parts = [
+    place(paint(smooth(new SphereGeometry(1, 14, 10)), o.shoes), [0, 0.012, -0.028], [0, 0, 0], [0.066, 0.058, 0.118]),
+    place(paint(smooth(new SphereGeometry(1, 14, 8)), o.sole), [0, -0.024, -0.03], [0, 0, 0], [0.07, 0.03, 0.126]),
+    // Heel tab, in the rand colour, so the shoe reads from behind.
+    place(paint(smooth(new SphereGeometry(1, 10, 6)), o.sole), [0, 0.03, 0.07], [0, 0, 0], [0.03, 0.035, 0.02]),
+  ];
+  if (o.crampons) {
+    parts.push(place(box(0.1, 0.012, 0.2, '#b8bfcc'), [0, -0.055, -0.03]));
+    for (const [x, z] of [
+      [-0.035, -0.1],
+      [0.035, -0.1],
+      [-0.035, 0.03],
+      [0.035, 0.03],
+    ] as const) {
+      parts.push(place(paint(flat(new ConeGeometry(0.012, 0.04, 4)), '#b8bfcc'), [x, -0.078, z], [Math.PI, 0, 0]));
+    }
+    parts.push(place(paint(flat(new ConeGeometry(0.012, 0.05, 4)), '#b8bfcc'), [0, -0.03, -0.165], [-Math.PI / 2, 0, 0]));
+  }
+  return merge(parts);
+}
+
+/** Chalk bag clipped to the back of the harness: bag, stiff white rim, chalk and a brush holder. */
+function chalkBagGeometry(color: string): BufferGeometry {
+  return merge([
+    paint(smooth(new CylinderGeometry(0.062, 0.054, 0.12, 14, 1)), color),
+    place(paint(smooth(new TorusGeometry(0.058, 0.012, 6, 16)), '#f4f1ea'), [0, 0.062, 0], [Math.PI / 2, 0, 0]),
+    place(paint(smooth(new CylinderGeometry(0.05, 0.05, 0.01, 14)), '#ffffff'), [0, 0.058, 0]),
+    place(paint(smooth(new CylinderGeometry(0.012, 0.012, 0.09, 6)), '#2b2d42'), [0.058, 0.0, 0.01]),
+  ]);
+}
+
 interface Rig {
   root: Group;
   torso: Mesh;
-  hips: Mesh;
+  shorts: Mesh;
+  belt: Mesh;
+  neck: Mesh;
   head: Group;
+  shoulder: Record<'L' | 'R', Mesh>;
   upperArm: Record<'L' | 'R', Mesh>;
   sleeve: Record<'L' | 'R', Mesh | null>;
   forearm: Record<'L' | 'R', Mesh>;
   elbow: Record<'L' | 'R', Mesh>;
   hand: Record<'L' | 'R', Mesh>;
   thigh: Record<'L' | 'R', Mesh>;
+  legLoop: Record<'L' | 'R', Mesh>;
   shin: Record<'L' | 'R', Mesh>;
   knee: Record<'L' | 'R', Mesh>;
   foot: Record<'L' | 'R', Mesh>;
@@ -104,54 +197,67 @@ function buildRig(o: Outfit): Rig {
   const skin = toon(o.skin);
   const shirt = toon(o.shirt);
   const pants = toon(o.pants);
+  const harness = toon(o.harness);
   const armMat = o.sleeves === 'long' || puffy ? shirt : skin;
   const handMat = toon(o.gloves ?? o.skin);
   const shinMat = o.legs === 'long' ? pants : skin;
 
-  const torso = makeMesh(unitBall, shirt, root);
-  const hips = makeMesh(unitBall, pants, root);
+  const torso = makeMesh(TORSO, shirt, root);
+  const shorts = makeMesh(SHORTS, pants, root);
+  const belt = makeMesh(RING, harness, root);
+  const neck = makeMesh(GEO.neck, skin, root);
 
+  // Head (local +z is the face; it looks at where the climber is reaching).
   const head = new Group();
   root.add(head);
-  const skull = new Mesh(flat(new IcosahedronGeometry(BODY.headR, 1)), skin);
-  skull.castShadow = true;
-  head.add(skull);
-  const capGeo = flat(new SphereGeometry(BODY.headR * 1.06, 9, 6, 0, Math.PI * 2, 0, Math.PI * 0.55));
-  if (o.helmet) {
-    const helmet = new Mesh(flat(new SphereGeometry(BODY.headR * 1.18, 9, 6, 0, Math.PI * 2, 0, Math.PI * 0.52)), toon(o.helmet));
-    helmet.position.y = 0.02;
-    helmet.castShadow = true;
-    head.add(helmet);
-  } else {
-    const hair = new Mesh(capGeo, toon(o.hair));
-    hair.rotation.x = -0.35;
-    hair.position.set(0, 0.02, -0.02);
-    head.add(hair);
+  const R = BODY.headR;
+  makeMesh(new SphereGeometry(R, 18, 14), skin, head);
+  for (const x of [-1, 1]) {
+    const ear = makeMesh(GEO.ball, skin, head);
+    ear.position.set(x * R * 0.97, -R * 0.08, -R * 0.05);
+    ear.scale.set(R * 0.2, R * 0.3, R * 0.24);
   }
-  const eyeGeo = new SphereGeometry(0.022, 6, 4);
-  for (const x of [-0.065, 0.065]) {
+  if (o.helmet) {
+    const helmet = makeMesh(new SphereGeometry(R * 1.17, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.54), toon(o.helmet), head);
+    helmet.position.y = R * 0.08;
+    const rim = makeMesh(new TorusGeometry(R * 1.13, R * 0.07, 6, 24).rotateX(Math.PI / 2), toon(o.helmet), head);
+    rim.position.y = R * 0.1;
+  } else {
+    // Hair: cap over the top and back, and a bun with a hair tie.
+    const hairMat = toon(o.hair);
+    const cap = makeMesh(new SphereGeometry(R * 1.08, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat, head);
+    cap.rotation.x = -0.45;
+    cap.position.set(0, R * 0.04, -R * 0.03);
+    const bun = makeMesh(GEO.ball, hairMat, head);
+    bun.position.set(0, R * 0.5, -R * 0.95);
+    bun.scale.setScalar(R * 0.42);
+    const tie = makeMesh(RING, toon(o.shoes), head);
+    tie.position.set(0, R * 0.38, -R * 0.83);
+    tie.rotation.x = 0.9;
+    tie.scale.setScalar(R * 0.26);
+  }
+  const eyeGeo = new SphereGeometry(R * 0.12, 8, 6);
+  for (const x of [-0.34, 0.34]) {
     const eye = new Mesh(eyeGeo, toon('#151515'));
-    eye.position.set(x, 0.02, BODY.headR * 0.92);
+    eye.position.set(x * R, R * 0.1, R * 0.92);
     head.add(eye);
   }
 
   const side = <T,>(f: (s: 'L' | 'R') => T): Record<'L' | 'R', T> => ({ L: f('L'), R: f('R') });
-  const upperArm = side(() => makeMesh(unitCyl, armMat, root));
-  const sleeve = side(() => (o.sleeves === 'short' ? makeMesh(unitCyl, shirt, root) : null));
-  const forearm = side(() => makeMesh(unitCyl, puffy ? shirt : skin, root));
-  const elbow = side(() => makeMesh(unitBall, puffy ? shirt : skin, root));
-  const hand = side(() => makeMesh(unitBall, handMat, root));
-  const thigh = side(() => makeMesh(unitCyl, pants, root));
-  const shin = side(() => makeMesh(unitCyl, shinMat, root));
-  const knee = side(() => makeMesh(unitBall, o.legs === 'long' ? pants : skin, root));
-  const shoeGeo = merge([
-    paint(flat(new IcosahedronGeometry(1, 1)), o.shoes),
-    place(paint(flat(new IcosahedronGeometry(1, 1)), o.sole), [0, -0.45, 0], [0, 0, 0], [0.95, 0.5, 0.95]),
-    ...(o.crampons ? [place(box(1.6, 0.3, 2.2, '#b8bfcc'), [0, -0.8, 0])] : []),
-  ]);
+  const shoulder = side(() => makeMesh(GEO.ball, o.sleeves === 'none' ? skin : shirt, root));
+  const upperArm = side(() => makeMesh(GEO.upperArm, armMat, root));
+  const sleeve = side(() => (o.sleeves === 'short' ? makeMesh(GEO.sleeve, shirt, root) : null));
+  const forearm = side(() => makeMesh(GEO.forearm, puffy ? shirt : skin, root));
+  const elbow = side(() => makeMesh(GEO.ball, puffy ? shirt : skin, root));
+  const hand = side(() => makeMesh(GEO.ball, handMat, root));
+  const thigh = side(() => makeMesh(GEO.thigh, pants, root));
+  const legLoop = side(() => makeMesh(RING, harness, root));
+  const shin = side(() => makeMesh(GEO.shin, shinMat, root));
+  const knee = side(() => makeMesh(GEO.ball, o.legs === 'long' ? pants : skin, root));
+  const shoeGeo = shoeGeometry(o);
   const foot = side(() => makeMesh(shoeGeo, toonVC(), root));
 
-  const chalk = o.chalkBag ? makeMesh(flat(new CylinderGeometry(0.075, 0.065, 0.11, 7)), toon(o.chalkBag), root) : null;
+  const chalk = o.chalkBag ? makeMesh(chalkBagGeometry(o.chalkBag), toonVC(), root) : null;
 
   let axes: Rig['axes'] = null;
   let chips: InstancedMesh | null = null;
@@ -177,7 +283,7 @@ function buildRig(o: Outfit): Rig {
     noInk.add(chips);
   }
 
-  return { root, torso, hips, head, upperArm, sleeve, forearm, elbow, hand, thigh, shin, knee, foot, chalk, axes, chips };
+  return { root, torso, shorts, belt, neck, head, shoulder, upperArm, sleeve, forearm, elbow, hand, thigh, legLoop, shin, knee, foot, chalk, axes, chips };
 }
 
 interface Chip {
@@ -215,7 +321,6 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     () => ({
       pelvis: new Vector3(),
       chest: new Vector3(),
-      neck: new Vector3(),
       head: new Vector3(),
       sh: { L: new Vector3(), R: new Vector3() },
       hip: { L: new Vector3(), R: new Vector3() },
@@ -226,6 +331,11 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       hold: { L: new Vector3(), R: new Vector3() },
       pole: new Vector3(),
       look: new Vector3(),
+      bag: new Vector3(),
+      xb: new Vector3(),
+      yb: new Vector3(),
+      zb: new Vector3(),
+      torsoQ: new Quaternion(),
     }),
     [],
   );
@@ -332,13 +442,25 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     const C = { u: P.u + upU * BODY.torso, v: P.v + upV * BODY.torso };
     toWorld(def, P.u, P.v, D.pelvis, J.pelvis);
     toWorld(def, C.u, C.v, D.chest + breathe, J.chest);
-    toWorld(def, C.u + upU * BODY.neck, C.v + upV * BODY.neck, D.chest, J.neck);
     toWorld(def, C.u + upU * (BODY.neck + BODY.headR * 0.95), C.v + upV * (BODY.neck + BODY.headR * 0.95), D.head, J.head);
     for (const sd of ['L', 'R'] as const) {
       const sg = sd === 'L' ? -1 : 1;
       toWorld(def, C.u + rtU * BODY.shoulderHalf * sg, C.v + rtV * BODY.shoulderHalf * sg, D.chest, J.sh[sd]);
       toWorld(def, P.u + rtU * BODY.hipHalf * sg, P.v + rtV * BODY.hipHalf * sg, D.pelvis - 0.02, J.hip[sd]);
     }
+
+    // Torso basis: x across the shoulders, y up the spine, z out of the back (away from the wall).
+    const yb = J.yb.subVectors(J.chest, J.pelvis).normalize();
+    const xb = J.xb.subVectors(J.sh.R, J.sh.L).normalize();
+    const zb = J.zb.crossVectors(xb, yb).normalize();
+    xb.crossVectors(yb, zb).normalize();
+    basis.makeBasis(xb, yb, zb);
+    J.torsoQ.setFromRotationMatrix(basis);
+    const torsoLen = J.pelvis.distanceTo(J.chest);
+    const puffy = outfit.sleeves === 'puffy';
+    const bulk = puffy ? 1.2 : 1;
+    // Chalk bag hangs off the back of the harness belt.
+    J.bag.copy(J.pelvis).addScaledVector(yb, 0.02).addScaledVector(zb, 0.2);
 
     for (const sd of ['L', 'R'] as const) {
       const limb: Limb = sd === 'L' ? 'lh' : 'rh';
@@ -349,7 +471,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       toWorld(def, spot.u, spot.v, 0.03, J.hold[sd]);
       toWorld(def, spot.u, spot.v + def.handOffsetV, D.hand + arc, J.ha[sd]);
       if (chalkW > 0 && a.chalkHand === sd && rig.chalk) {
-        tmp.copy(J.pelvis).addScaledVector(def.normal, 0.16).addScaledVector(def.right, sg * 0.05);
+        tmp.copy(J.bag).addScaledVector(yb, 0.08).addScaledVector(xb, sg * 0.03);
         J.ha[sd].lerp(tmp, chalkW);
       }
       J.pole.copy(J.sh[sd]).addScaledVector(def.up, -0.5).addScaledVector(def.right, sg * 0.6).addScaledVector(def.normal, 0.5);
@@ -362,22 +484,18 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     }
 
     // --- Place parts ----------------------------------------------------------------------------
-    const puffy = outfit.sleeves === 'puffy';
-    const bulk = puffy ? 1.22 : 1;
-    // Torso basis: x across the shoulders, y up the spine, z out of the chest.
-    const yb = tmp.subVectors(J.chest, J.pelvis).normalize();
-    const xb = tmp2.subVectors(J.sh.R, J.sh.L).normalize();
-    const zb = new Vector3().crossVectors(xb, yb).normalize();
-    xb.crossVectors(yb, zb).normalize();
-    basis.makeBasis(xb, yb, zb);
-    rig.torso.quaternion.setFromRotationMatrix(basis);
-    rig.torso.position.lerpVectors(J.pelvis, J.chest, 0.55);
-    const torsoLen = J.pelvis.distanceTo(J.chest);
-    rig.torso.scale.set(0.2 * bulk, torsoLen * 0.62, 0.14 * bulk * (1 + breathe * 3));
-    rig.hips.quaternion.copy(rig.torso.quaternion);
-    rig.hips.position.copy(J.pelvis);
-    rig.hips.scale.set(0.18, 0.12, 0.13);
+    rig.torso.quaternion.copy(J.torsoQ);
+    rig.torso.position.copy(J.pelvis).addScaledVector(yb, 0.02);
+    rig.torso.scale.set(0.2 * bulk, torsoLen + 0.06, 0.135 * bulk * (1 + breathe * 3));
+    rig.shorts.quaternion.copy(J.torsoQ);
+    rig.shorts.position.copy(J.pelvis);
+    rig.shorts.scale.set(0.175, 1, 0.14);
+    rig.belt.quaternion.copy(J.torsoQ);
+    rig.belt.position.copy(J.pelvis).addScaledVector(yb, 0.08);
+    rig.belt.scale.set(0.183, 0.16, 0.148);
 
+    tmp.copy(J.pelvis).addScaledVector(yb, torsoLen + 0.02);
+    segment(rig.neck, tmp, J.head, 0.058);
     rig.head.position.copy(J.head);
     if (a.reach) J.look.copy(a.reach === 'L' ? J.ha.L : J.ha.R);
     else J.look.copy(J.chest).addScaledVector(def.up, 0.8);
@@ -386,27 +504,33 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     rig.head.lookAt(J.look);
 
     for (const sd of ['L', 'R'] as const) {
-      segment(rig.upperArm[sd], J.sh[sd], J.el[sd], 0.062 * bulk);
+      rig.shoulder[sd].position.copy(J.sh[sd]);
+      rig.shoulder[sd].scale.setScalar(0.078 * bulk);
+      segment(rig.upperArm[sd], J.sh[sd], J.el[sd], 0.07 * bulk);
       const sl = rig.sleeve[sd];
       if (sl) {
-        tmp.lerpVectors(J.sh[sd], J.el[sd], 0.45);
-        segment(sl, J.sh[sd], tmp, 0.078);
+        tmp3.lerpVectors(J.sh[sd], J.el[sd], 0.42);
+        segment(sl, J.sh[sd], tmp3, 0.086);
       }
-      segment(rig.forearm[sd], J.el[sd], J.ha[sd], 0.052 * (puffy ? 1.2 : 1));
+      segment(rig.forearm[sd], J.el[sd], J.ha[sd], 0.064 * (puffy ? 1.18 : 1));
       rig.elbow[sd].position.copy(J.el[sd]);
-      rig.elbow[sd].scale.setScalar(0.062 * bulk);
+      rig.elbow[sd].scale.setScalar(0.061 * bulk);
       rig.hand[sd].position.copy(J.ha[sd]);
-      rig.hand[sd].scale.setScalar(0.06);
-      segment(rig.thigh[sd], J.hip[sd], J.kn[sd], 0.085);
-      segment(rig.shin[sd], J.kn[sd], J.ft[sd], 0.07);
+      rig.hand[sd].scale.setScalar(0.064);
+      segment(rig.thigh[sd], J.hip[sd], J.kn[sd], 0.098);
+      tmp3.lerpVectors(J.hip[sd], J.kn[sd], 0.2);
+      rig.legLoop[sd].position.copy(tmp3);
+      segDir.subVectors(J.kn[sd], J.hip[sd]).normalize();
+      rig.legLoop[sd].quaternion.setFromUnitVectors(Y, segDir);
+      rig.legLoop[sd].scale.set(0.1, 0.14, 0.1);
+      segment(rig.shin[sd], J.kn[sd], J.ft[sd], 0.078);
       rig.knee[sd].position.copy(J.kn[sd]);
-      rig.knee[sd].scale.setScalar(0.08);
-      // Shoe: toe into the wall, sole down.
+      rig.knee[sd].scale.setScalar(outfit.legs === 'long' ? 0.08 : 0.072);
+      // Shoe: toe into the wall, sole down, sitting just under the ankle.
       const f = rig.foot[sd];
-      f.position.copy(J.ft[sd]).addScaledVector(def.normal, 0.02);
+      f.position.copy(J.ft[sd]).addScaledVector(def.normal, 0.03).addScaledVector(def.up, -0.02);
       basis.makeBasis(def.right, def.up, def.normal);
       f.quaternion.setFromRotationMatrix(basis);
-      f.scale.set(0.065, 0.06, 0.13);
 
       const axe = rig.axes?.[sd];
       if (axe) {
@@ -416,7 +540,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
         axe.position.copy(J.ha[sd]).addScaledVector(tmp.normalize(), -0.08);
         const yAx = tmp;
         const zAx = tmp2.copy(def.normal).addScaledVector(yAx, -def.normal.dot(yAx)).normalize();
-        const xAx = new Vector3().crossVectors(yAx, zAx);
+        const xAx = tmp3.crossVectors(yAx, zAx);
         basis.makeBasis(xAx, yAx, zAx);
         axe.quaternion.setFromRotationMatrix(basis);
         const snap = a.reach === sd ? Math.max(0, 1 - (now - a.tick) / motion.axeTick) : 0;
@@ -425,8 +549,8 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       }
     }
     if (rig.chalk) {
-      rig.chalk.position.copy(J.pelvis).addScaledVector(def.normal, 0.15).addScaledVector(def.up, -0.02);
-      rig.chalk.quaternion.copy(rig.torso.quaternion);
+      rig.chalk.position.copy(J.bag);
+      rig.chalk.quaternion.copy(J.torsoQ);
     }
 
     // Ice chips.
