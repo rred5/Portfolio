@@ -1,9 +1,9 @@
 // Screenshot driver: runs scripted steps in the locally installed Chrome (playwright-core, no browser
 // download). Usage:
 //   node scripts/screenshots.mjs <steps.json> <outDir>
-// steps.json: [{ "viewport": [1280, 800], "mobile": false, "reduced": false }, { "goto": "/" },
+// steps.json: [{ "viewport": [1280, 800], "dpr": 1, "mobile": false, "reduced": false }, { "goto": "/" },
 //   { "wait": 1500 }, { "hover": [x, y] }, { "click": [x, y] }, { "clickSel": ".region-label" },
-//   { "focusSel": "..." }, { "key": "Escape" }, { "eval": "js" }, { "shot": "name" }]
+//   { "focusSel": "..." }, { "key": "Escape" }, { "eval": "js" }, { "shot": "name", "clip": [x, y, w, h] }]
 // Env: BASE (default http://localhost:4400).
 import fs from 'node:fs';
 import path from 'node:path';

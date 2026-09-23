@@ -230,8 +230,9 @@ layout's slot count; `tag` ≤ 18 chars.
 
 ### 6.1 Layout
 
-- Camera looks down from a **high angle (~55°)** toward the north, framing the whole island with
-  ocean around it. The island fills ~70% of the viewport height on desktop.
+- Camera looks down from a **three-quarter angle (~41°, 52° in portrait)** toward the north, framing
+  the whole island with ocean around it (v1.1: lowered from ~55° so terrain and landmarks read in
+  depth). The island fills ~70% of the viewport height on desktop.
 - Four regions, each a miniature of its environment. The tallest one sits at the back so nothing is
   hidden:
   - **Back-left: Glacier (Experience):** a snowy peak, the island's highest point.
@@ -381,8 +382,9 @@ Each section has a hand-authored layout file (`src/scenes/<env>/layout.ts`) that
 Every interactive hold, and nothing else, has:
 1. **Tape tag:** a short strip of colored tape just below the hold (like gym route tape) with the
    hold's **name tag** text (`item.tag`) as an HTML label attached to it. Always visible (D12).
-2. **Pulse glow:** a soft yellow (`#FFD23F`) rim glow, pulsing slowly (1.8s period, low amplitude).
-   On the Kilter board the LED color (§7.1) replaces the yellow glow color; the tape tag is still there.
+2. **Pulse glow:** a soft yellow (`#FFD23F`) glow ring on the wall around the hold, pulsing slowly
+   (1.8s period, low amplitude). On the Kilter board the LED color (§7.1) replaces the yellow and the
+   tape is dropped (Kilter problems are marked by their LED rings); the name tag is still there.
 
 ### 8.3 Hold states
 
@@ -786,7 +788,11 @@ Small calls made while building, for review:
 | `Section.navLabel` | Extra content field: short nav label (`About` for "About & Contact") | "About & Contact" doesn't fit a 72px rail button |
 | Nav default | `?nav=rail` is the default when no `?nav=` is given | One variant has to be the default during the comparison |
 | Poses | Poses are **generated** from each hold's position (`src/scenes/wall/route.ts`) instead of hand-written per hold; support holds are placed where the other limbs land | Works for any wall size from 3 to 8 items with no manual authoring; still "one predefined pose per hold" |
-| Island regions | Regions are separated by narrow water channels (a cross-shaped river) | Clearest possible boundary between regions |
+| Island regions | Regions are separated by narrow water channels that wind like rivers, meeting at a central rock with a trailhead signpost (v1.1; v1 had a straight cross) | Clear boundaries without the ruler-straight look |
 | Glacier outfit | Crampons shown as a plate under the boots | Readable at this scale |
 | Tab order | Top bar → hold tags → nav → card | Tags (the content) come before navigation |
 | Transition timings | As in §9.1, unchanged | Tune in `src/config/motion.ts` |
+| Holds (v1.1) | Sculpted, smooth-shaded holds with flat backs and chalk on the upward faces, tinted to each wall's rock (plastic colours on the Kilter board); glow ring replaces the back-face halo shell | Faceted holds drew ink lines across every facet and looked stuck on; the halo cut into the wall |
+| Climber (v1.1) | Smooth-shaded rig: tapered limbs, shaped torso and shorts, harness with the chalk bag on the belt, ears, hair bun, climbing shoes pointing into the wall | Reads better from behind, where the camera always sees it |
+| Wall surroundings (v1.1) | Plains boulder sits in an outcrop cluster with a sandy apron and talus; the ice sits between snow-capped rock buttresses; the sea cliff steps down into the water | Walls looked like slabs placed in the scene |
+| Island extras (v1.1) | Lighthouse on the coast region, a sailboat circling the island, cartoon wave marks on the water | Life on the landing page |
