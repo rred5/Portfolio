@@ -85,7 +85,20 @@ Open from this round:
 - The views are framed for landscape screens; on phones the portrait cameras keep the route in
   frame and only show a slice of the view (Skills) or none (About). A phone-specific framing that
   pans to the view when no card is open could show more.
-- The pinned hold's tag sits below its hold, so it can overlap the climber's head when the climber
-  is on that hold (most visible with the ice axes). Tags could move beside the hold instead.
+- ~~The pinned hold's tag sits below its hold, so it can overlap the climber's head~~: tags on the
+  natural walls moved beside their holds in v1.3.
 - The farmland, valley and harbour add ~15 KB gzipped of code; frame rate on phones is still
   unmeasured.
+
+## v1.3 (third round of feedback)
+
+Done: the flickering specks on the island (z-fighting chunk skirts along the seams, drawn as ink by
+the normal-edge pass); the island farmland rebuilt without overlaps or clipping; wall edges with
+real thickness on the Skills, Experience and About faces; the outdoor climbs framed and styled so
+the climber and holds lead, closer to the Kilter board; hold tags beside their holds. Details in
+`docs/SPEC.md` §20.
+
+Open from this round:
+- Tighter framings trade some of the view for the climb; on phones the views are mostly gone.
+- The island's region hover lift still moves every chunk of a region; any future decoration that
+  sits across two chunks should be checked for seams in the same way.

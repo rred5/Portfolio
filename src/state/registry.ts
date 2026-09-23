@@ -25,6 +25,8 @@ export interface Anchor {
   view: ViewId;
   /** World position, read every frame (scenes may animate it, e.g. region lift). */
   pos: Vector3;
+  /** Measured width of the element's content (tags beside their hold), cached once laid out. */
+  width?: number;
 }
 
 /** DOM elements pinned to 3D points (region labels, hold tags). */

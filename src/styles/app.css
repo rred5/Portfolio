@@ -253,6 +253,15 @@
   transform: translate(-50%, 0);
 }
 
+/* Beside the hold, level with it (natural walls). */
+.anchor--tag-left > .hold-tag {
+  transform: translate(-100%, -50%);
+}
+
+.anchor--tag-right > .hold-tag {
+  transform: translate(0, -50%);
+}
+
 .hold-tag {
   position: absolute;
   left: 0;

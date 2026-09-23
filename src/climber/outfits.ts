@@ -40,7 +40,7 @@ export const OUTFITS: Record<EnvId, Outfit> = {
   plains: {
     skin: SKIN,
     hair: HAIR,
-    shirt: '#ff7a59',
+    shirt: '#1fa7b8',
     sleeves: 'short',
     pants: '#3a5a8c',
     legs: 'long',

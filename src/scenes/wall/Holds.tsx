@@ -132,10 +132,15 @@ uniform float uOpacity;
 uniform float uHot;
 varying float vR;
 void main() {
-  float ring = smoothstep(0.5, 0.74, vR) * (1.0 - smoothstep(0.8, 1.0, vR));
-  float fill = (1.0 - smoothstep(0.2, 0.85, vR)) * 0.45 * uHot;
-  float a = clamp((ring + fill) * uOpacity, 0.0, 1.0);
-  gl_FragColor = vec4(uColor, a);
+  // A solid band with a soft outer glow, and a thin dark rim inside it so the ring reads on light
+  // rock and ice as well as dark.
+  float band = smoothstep(0.5, 0.6, vR) * (1.0 - smoothstep(0.82, 0.9, vR));
+  float halo = (1.0 - smoothstep(0.88, 1.0, vR)) * smoothstep(0.82, 0.88, vR) * 0.5;
+  float rim = smoothstep(0.42, 0.47, vR) * (1.0 - smoothstep(0.5, 0.55, vR));
+  float fill = (1.0 - smoothstep(0.2, 0.5, vR)) * 0.4 * uHot;
+  vec3 col = mix(uColor, vec3(0.08), rim * 0.8);
+  float a = clamp((max(band + halo, rim * 0.55) + fill) * uOpacity, 0.0, 1.0);
+  gl_FragColor = vec4(col, a);
 }
 `;
 
@@ -206,7 +211,11 @@ export function Holds({ layout, style }: { layout: WallLayout; style: HoldStyle 
     const decorSpots = style.decorSpots ? style.decorSpots(layout, r) : scatter(layout, r, style.decorCount ?? 18, area);
     for (const s of decorSpots) staticParts.push(onWall(def, style.decor(r, s), s.u, s.v, lift, (r() - 0.5) * 2));
     if (style.tape !== false) {
-      for (const slot of route.slots) staticParts.push(onWall(def, place(box(0.2, 0.045, 0.012, CUE), [0, 0, 0.006]), slot.u, slot.v - 0.16, 0, (r() - 0.5) * 0.15));
+      // Tape tick under each hold, in the hold's glow colour.
+      route.slots.forEach((slot, i) => {
+        const tape = place(box(0.2, 0.045, 0.012, style.glow ? style.glow(i, n) : CUE), [0, 0, 0.006]);
+        staticParts.push(onWall(def, tape, slot.u, slot.v - 0.16, 0, (r() - 0.5) * 0.15));
+      });
     }
     const staticMesh = new Mesh(merge(staticParts), toonVC());
     staticMesh.castShadow = true;

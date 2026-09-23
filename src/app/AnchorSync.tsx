@@ -6,6 +6,8 @@ import { anchors } from '../state/registry';
 import { getState } from '../state/store';
 
 const v = new Vector3();
+/** Closest a tag beside its hold may come to the edge of the screen. */
+const EDGE = 6;
 
 export function AnchorSync() {
   useFrame((state) => {
@@ -19,8 +21,15 @@ export function AnchorSync() {
         v.copy(a.pos).project(state.camera);
         hidden = v.z > 1;
         if (!hidden) {
-          const x = (v.x * 0.5 + 0.5) * W;
+          let x = (v.x * 0.5 + 0.5) * W;
           const y = (-v.y * 0.5 + 0.5) * H;
+          // A tag beside its hold slides in rather than run off the screen (over its own hold's
+          // ring, never across to the climber's side).
+          const left = a.el.classList.contains('anchor--tag-left');
+          if (left || a.el.classList.contains('anchor--tag-right')) {
+            if (!a.width) a.width = (a.el.firstElementChild as HTMLElement | null)?.offsetWidth || 0;
+            x = left ? Math.max(x, a.width + EDGE) : Math.min(x, W - a.width - EDGE);
+          }
           a.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
         }
       }

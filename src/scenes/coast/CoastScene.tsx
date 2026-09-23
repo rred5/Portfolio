@@ -42,11 +42,19 @@ const CHALK = '#fff6ea';
 
 /** Sea-cliff edges and flakes in the rock colour, chalked where hands go. */
 const style: HoldStyle = {
-  interactive: (r) => sculptHold(r, { kind: pickKind(r, { edge: 1, jug: 1, knob: 1, flake: 1 }), size: 0.24, color: '#dfa47c', top: CHALK, topAmount: 0.55, rough: 0.14 }),
-  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, crimp: 1, knob: 1 }), size: range(r, 0.15, 0.19), color: '#cf916b', top: CHALK, topAmount: 0.4, rough: 0.14 }),
-  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, flake: 1, knob: 1, sloper: 1 }), size: range(r, 0.12, 0.22), color: pick(r, ROCK), top: CHALK, topAmount: 0.06, rough: 0.16 }),
-  decorCount: 14,
-  decorArea: { u0: -2.7, u1: 2.7, v0: 0.4, v1: 4.2 },
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { edge: 1, jug: 1, knob: 1, flake: 1 }), size: 0.3, color: '#f0c29c', top: CHALK, topAmount: 0.6, rough: 0.12 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, crimp: 1, knob: 1 }), size: range(r, 0.19, 0.23), color: '#e2ac86', top: CHALK, topAmount: 0.45, rough: 0.13 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, flake: 1, knob: 1, sloper: 1 }), size: range(r, 0.09, 0.15), color: pick(r, ROCK), top: CHALK, topAmount: 0.05, rough: 0.16 }),
+  glow: () => '#35d6ff',
+  decorCount: 9,
+  decorArea: { u0: -2.5, u1: 2.3, v0: 0.4, v1: 4.2 },
+};
+
+/** Per-ledge hash (0..1): how far each 0.82 m band of the cliff's end stops short. */
+const ledgeHash = (v: number, salt: number) => {
+  const k = Math.floor(v / 0.82);
+  const x = Math.sin(k * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
 };
 
 function buildScene() {
@@ -54,14 +62,26 @@ function buildScene() {
   const r = rng(707);
   const face = reliefMesh(def, {
     u0: -10,
-    u1: 3.9,
+    u1: 3.5,
     v0: SEA_Y - 0.6,
     vTop: (u) => 6.6 + 0.5 * Math.sin(u * 0.8) + 0.3 * fbm(u, 2, 5),
-    nu: 70,
-    nv: 48,
-    roll: edgeRoll({ right: [2.8, 3.9, 2.8], top: [1.0, 1.3] }),
+    nu: 66,
+    nv: 60,
+    roll: edgeRoll({ top: [1.0, 1.3] }),
+    // The cliff's end is squared off ledge by ledge: each 0.82 m band stops at its own point and
+    // turns back into the headland, so the edge steps like the ledges instead of a straight cut.
+    corner: {
+      end: (v) => 3.5 - 0.65 * ledgeHash(v, 1),
+      depth: (v) => 2.0 + 0.8 * ledgeHash(v, 2),
+      cols: 6,
+      flare: 0.25,
+      rough: 0.22,
+      seed: 31,
+    },
     color: (u, v, n) => {
       if (n.y > 0.62 && v > 5.4) return fbm(u * 2, v, 8) > 0 ? '#8cc956' : '#7dbb4a';
+      // The end's side faces: the same bands, a shade darker.
+      if (n.dot(def.right) > 0.6 && v > SEA_Y + 1.6) return ['#8c5a4a', '#9a644f', '#83533f'][Math.abs(Math.floor(v / 0.82)) % 3]!;
       // Wet, dark rock just above the waterline; the cliff below the ledge keeps its bands.
       if (v < SEA_Y + 1.6) return v < SEA_Y + 0.6 ? '#4a302a' : '#5e3e36';
       const depth = def.surface(u, v);

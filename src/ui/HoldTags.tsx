@@ -11,15 +11,31 @@ import { useStore } from '../state/store';
 import { Anchored } from './Anchored';
 import { PinIcon } from './icons';
 
-/** Tape/tag position, just below each interactive hold. */
-export function tagAnchors(section: SectionId): Vector3[] {
+export type TagSide = 'below' | 'left' | 'right';
+
+/**
+ * Where each interactive hold's tag goes. On the board it hangs just below the hold. On the natural
+ * walls, where the climber hangs straight under the hold being used, it sits level with the hold on
+ * the side away from the climbing line, so it never covers the climber's head.
+ */
+export function tagAnchors(section: SectionId): { pos: Vector3; side: TagSide }[] {
   const { def, route } = wallLayout(section);
-  return route.slots.map((slot) => toWorld(def, slot.u, slot.v - 0.2, 0.1, new Vector3()));
+  if (def.route.shape === 'up-traverse') {
+    return route.slots.map((slot) => ({ pos: toWorld(def, slot.u, slot.v - 0.2, 0.1, new Vector3()), side: 'below' }));
+  }
+  const [l0, l1] = def.route.lane ?? [0, 0];
+  const { vStart, vEnd } = def.route;
+  return route.slots.map((slot) => {
+    const t = Math.min(1, Math.max(0, (slot.v - vStart) / (vEnd - vStart)));
+    const side: TagSide = slot.u < l0 + (l1 - l0) * t ? 'left' : 'right';
+    const du = side === 'left' ? -0.24 : 0.24;
+    return { pos: toWorld(def, slot.u + du, slot.v, 0.1, new Vector3()), side };
+  });
 }
 
 function SectionTags({ section }: { section: SectionId }) {
   const { items } = wallLayout(section);
-  const positions = useMemo(() => tagAnchors(section), [section]);
+  const anchors = useMemo(() => tagAnchors(section), [section]);
   const hoverItem = useStore((s) => s.hoverItem);
   const pinnedItem = useStore((s) => s.pinnedItem);
   const setHoverItem = useStore((s) => s.setHoverItem);
@@ -31,7 +47,7 @@ function SectionTags({ section }: { section: SectionId }) {
       {items.map((item, i) => {
         const pinned = pinnedItem === item.id;
         return (
-          <Anchored key={item.id} view={section} pos={positions[i]!} className="anchor--tag">
+          <Anchored key={item.id} view={section} pos={anchors[i]!.pos} className={`anchor--tag anchor--tag-${anchors[i]!.side}`}>
             <button
               type="button"
               ref={(el) => {

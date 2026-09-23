@@ -16,27 +16,49 @@ export interface ReliefOptions {
   nv: number;
   /** Extra depth offset (negative = rolls away from the viewer), for rounded edges. */
   roll?: (u: number, v: number, vTop: number) => number;
+  /**
+   * Squared-off right-hand edge with thickness: the face ends at `end(v)` (which can step from ledge
+   * to ledge), then wraps round the corner into a return face running `depth(v)` back into the
+   * rock, flaring out by `flare` toward +u so the camera sees it. `rough` roughens the return face.
+   * Only the columns from u1 − 3 on are moved to meet the corner.
+   */
+  corner?: { end: (v: number) => number; depth: (v: number) => number; cols: number; flare: number; rough: number; seed: number };
   color: (u: number, v: number, n: Vector3, world: Vector3) => ColorRepresentation;
 }
 
 export function reliefMesh(def: WallDef, o: ReliefOptions): BufferGeometry {
   const pts: Vector3[][] = [];
   const uv: [number, number][][] = [];
-  for (let i = 0; i <= o.nu; i++) {
-    const u = o.u0 + ((o.u1 - o.u0) * i) / o.nu;
-    const top = o.vTop(u);
+  const at = (u: number, v: number, d: number) =>
+    new Vector3().copy(def.origin).addScaledVector(def.right, u).addScaledVector(def.up, v).addScaledVector(def.normal, d);
+  const cols = o.nu + (o.corner?.cols ?? 0);
+  const warp0 = o.u1 - 3;
+  for (let i = 0; i <= cols; i++) {
+    const side = o.corner && i > o.nu ? (i - o.nu) / o.corner.cols : 0;
+    const uNom = o.u0 + ((o.u1 - o.u0) * Math.min(i, o.nu)) / o.nu;
+    const top = o.vTop(uNom);
     const col: Vector3[] = [];
     const colUV: [number, number][] = [];
     for (let j = 0; j <= o.nv; j++) {
       const v = o.v0 + ((top - o.v0) * j) / o.nv;
-      const d = def.surface(u, v) + (o.roll ? o.roll(u, v, top) : 0);
-      col.push(
-        new Vector3()
-          .copy(def.origin)
-          .addScaledVector(def.right, u)
-          .addScaledVector(def.up, v)
-          .addScaledVector(def.normal, d),
-      );
+      let u = uNom;
+      let d: number;
+      if (o.corner) {
+        const end = o.corner.end(v);
+        if (uNom > warp0) u = warp0 + ((uNom - warp0) * (end - warp0)) / (o.u1 - warp0);
+        if (side > 0) {
+          // Round the corner: out along +u a little, back into the rock, with a rough surface.
+          const c = o.corner;
+          const bump = c.rough * fbm(side * 3 + c.seed, v * 0.9, c.seed) * Math.sin(side * Math.PI);
+          u = end + c.flare * side + bump;
+          d = def.surface(end, v) + (o.roll ? o.roll(end, v, top) : 0) - c.depth(v) * side;
+        } else {
+          d = def.surface(u, v) + (o.roll ? o.roll(u, v, top) : 0);
+        }
+      } else {
+        d = def.surface(u, v) + (o.roll ? o.roll(u, v, top) : 0);
+      }
+      col.push(at(u, v, d));
       colUV.push([u, v]);
     }
     pts.push(col);
@@ -49,7 +71,7 @@ export function reliefMesh(def: WallDef, o: ReliefOptions): BufferGeometry {
     pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
     faceUV.push([(ua[0] + ub[0] + uc[0]) / 3, (ua[1] + ub[1] + uc[1]) / 3]);
   };
-  for (let i = 0; i < o.nu; i++) {
+  for (let i = 0; i < cols; i++) {
     for (let j = 0; j < o.nv; j++) {
       const a = pts[i]![j]!;
       const b = pts[i + 1]![j]!;

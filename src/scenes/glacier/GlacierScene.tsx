@@ -29,25 +29,40 @@ import { Particles } from '../common/ambient';
 import { wallLayout } from '../layouts';
 import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
-import { cliffFace, edgeRoll, reliefMesh } from '../wall/surface';
+import { cliffFace, reliefMesh } from '../wall/surface';
 import { toWorld } from '../wall/types';
 import { glacierWall } from '../walls';
 
 const ICE = ['#7fd3f7', '#a8e4fa', '#6ac4ef', '#94dcf8'];
 
-/** Ice bulges with a snow cap; the axe placements get a chipped pick mark. */
+/**
+ * Big snow-capped ice bulges on the route, with a chipped pick mark; the decoys stay small and
+ * ice-coloured so the route reads first.
+ */
 const style: HoldStyle = {
   interactive: (r) =>
     merge([
-      sculptHold(r, { kind: pickKind(r, { blob: 1, mushroom: 1, sloper: 1 }), size: 0.26, color: '#c8f2ff', top: '#ffffff', topAmount: 0.45, rough: 0.2 }),
+      sculptHold(r, { kind: pickKind(r, { blob: 1, mushroom: 1, sloper: 1 }), size: 0.32, color: '#e4f8ff', top: '#ffffff', topAmount: 0.5, rough: 0.18 }),
       // Chipped mark where the pick lands.
-      place(paint(flat(new TetrahedronGeometry(0.035)), '#5aa8e0'), [0, 0.02, 0.07], [0.6, 0.3, 0]),
+      place(paint(flat(new TetrahedronGeometry(0.04)), '#3f8fd0'), [0, 0.02, 0.09], [0.6, 0.3, 0]),
     ]),
-  support: (r) => sculptHold(r, { kind: pickKind(r, { blob: 1, mushroom: 1 }), size: range(r, 0.15, 0.2), color: '#b4ebfd', top: '#ffffff', topAmount: 0.4, rough: 0.2 }),
-  decor: (r) => sculptHold(r, { kind: pickKind(r, { blob: 2, mushroom: 1, sloper: 1 }), size: range(r, 0.12, 0.26), color: pick(r, ICE), top: '#ffffff', topAmount: 0.3, rough: 0.22 }),
-  decorCount: 12,
-  decorArea: { u0: -2.8, u1: 2.8, v0: 0.5, v1: 4.9 },
+  support: (r) => sculptHold(r, { kind: pickKind(r, { blob: 1, mushroom: 1 }), size: range(r, 0.19, 0.24), color: '#d2f3ff', top: '#ffffff', topAmount: 0.45, rough: 0.18 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { blob: 2, mushroom: 1, sloper: 1 }), size: range(r, 0.1, 0.17), color: pick(r, ICE), top: '#ffffff', topAmount: 0.25, rough: 0.22 }),
+  glow: () => '#ffb020',
+  decorCount: 8,
+  decorArea: { u0: -2.4, u1: 2.0, v0: 0.5, v1: 4.9 },
 };
+
+/** Per-block hash (0..1) for the rib at the ice face's edge, one per 0.75 m of height. */
+const blockHash = (v: number, salt: number) => {
+  const k = Math.floor(v / 0.75);
+  const x = Math.sin(k * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+/** Ice-colour calming zone around the route. */
+const ROUTE_ZONE = { u: [-2.2, 2.0], v: [-0.2, 5.2] } as const;
+/** Rock tones for the rib's blocks. */
+const RIB = ['#5f6480', '#6b7089', '#767c96', '#646985'];
 
 function jaggedPeak(r: Rng, radius: number, height: number, snowFrom: number): BufferGeometry {
   const g = new ConeGeometry(radius, height, 8, 4);
@@ -78,7 +93,7 @@ function buttress(r: Rng, at: [number, number, number], w: number, h: number, d:
 /** Valley floor level, far below the start ledge. */
 const VALLEY_Y = -70;
 /** The ice face's right-hand end (u), past which the view opens up. */
-const FACE_END = 4.4;
+const FACE_END = 3.1;
 
 /** Ground height of the valley, with the glacier's trough. */
 function valleyY(x: number, z: number) {
@@ -104,15 +119,28 @@ function buildScene() {
   parts.push(
     reliefMesh(def, {
       u0: -14,
-      u1: FACE_END + 0.2,
+      u1: FACE_END,
       v0: -0.3,
       vTop: (u) => 15 + 0.8 * Math.sin(u * 0.7) + 0.6 * fbm(u * 1.2, 3, 12),
       nu: 96,
       nv: 84,
-      roll: edgeRoll({ right: [FACE_END - 1.2, FACE_END + 0.2, 2.0] }),
+      // The mountain's edge is a blocky rock rib with real thickness: each 0.75 m block stops at
+      // its own point and its side runs 1.8–2.8 m back into the mountain.
+      corner: {
+        end: (v) => FACE_END - 0.7 * blockHash(v, 3),
+        depth: (v) => 1.8 + blockHash(v, 4),
+        cols: 9,
+        flare: 0.35,
+        rough: 0.4,
+        seed: 23,
+      },
       color: (u, v, n) => {
         if (n.dot(up) > 0.55) return '#f4f8ff';
-        const edge = Math.max(-4.2 - u, u - (FACE_END - 0.7));
+        // The rib's side faces: bare rock.
+        if (n.dot(def.right) > 0.55) return fbm(u * 0.9, v * 0.5, 36) > 0.3 ? '#555a74' : RIB[Math.floor(blockHash(v, 5) * RIB.length)]!;
+        // Around the route the ice stays in two close tones, so the holds and climber stand out.
+        if (u > ROUTE_ZONE.u[0] && u < ROUTE_ZONE.u[1] && v > ROUTE_ZONE.v[0] && v < ROUTE_ZONE.v[1]) return fbm(u * 0.8, v * 0.8, 37) > 0.05 ? '#8ad6f6' : '#98dcf7';
+        const edge = Math.max(-4.2 - u, u - (FACE_END - 0.9));
         if (edge > 0 && fbm(u * 0.45 + 5, v * 0.45, 31) > 0.35 - edge * 0.5) return fbm(u, v, 32) > 0 ? '#7c8199' : '#8a8fa8';
         const band = fbm(u * 1.3, v * 0.14, 33) + 0.25 * fbm(u * 3, v * 3, 34);
         return ICE[Math.floor((band + 1) * 2.5) % ICE.length]!;
@@ -122,7 +150,7 @@ function buildScene() {
 
   // The mountain ends in a rock prow past the ice, running away back-left; its side faces away
   // from the camera, so the right of the frame is open valley.
-  parts.push(cliffFace([FACE_END - 0.2, -1.8], [-22, -50], VALLEY_Y, 15, { segs: 40, rows: 40, rough: 1.2, seed: 71, color: rockOrSnow }));
+  parts.push(cliffFace([FACE_END + 0.35, -2.6], [-22, -50], VALLEY_Y, 15, { segs: 40, rows: 40, rough: 1.2, seed: 71, color: rockOrSnow }));
   // Left buttresses (off to the side of the route).
   parts.push(buttress(r, [-5.5, 0, -0.1], 2.3, 7.8, 2.4, 0.25));
   parts.push(buttress(r, [-7.8, 0, -1.6], 2.2, 9.5, 2.4, 0.6));
@@ -140,7 +168,7 @@ function buildScene() {
   for (const [x, z, w, h] of [
     [0, 0.3, 3.2, 0.14],
     [-2.9, 0.45, 1.8, 0.32],
-    [2.8, 0.5, 1.7, 0.3],
+    [1.9, 0.5, 1.3, 0.3],
     [-4.4, 0.7, 1.6, 0.55],
   ] as const) {
     const g = new IcosahedronGeometry(1, 2);

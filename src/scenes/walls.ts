@@ -75,8 +75,8 @@ export const plainsWall: WallDef = {
   pelvisMin: 0.92,
   handOffsetV: 0,
   framing: {
-    landscape: { u: 1.5, v: 2.55, d: 0.4, yaw: 32, pitch: 11, fitW: 6.0, fitH: 5.0, fov: 38 },
-    portrait: { u: 0.9, v: 2.85, d: 0.4, yaw: 28, pitch: 10, fitW: 4.6, fitH: 5.0, fov: 40 },
+    landscape: { u: 1.0, v: 2.65, d: 0.4, yaw: 24, pitch: 9, fitW: 5.0, fitH: 4.35, fov: 38 },
+    portrait: { u: 0.45, v: 2.8, d: 0.4, yaw: 20, pitch: 9, fitW: 3.9, fitH: 4.6, fov: 40 },
   },
 };
 
@@ -99,8 +99,8 @@ export const glacierWall: WallDef = {
   pelvisMin: 0.92,
   handOffsetV: -0.42,
   framing: {
-    landscape: { u: 1.8, v: 2.6, d: 0.4, yaw: 36, pitch: 11, fitW: 6.4, fitH: 5.2, fov: 38 },
-    portrait: { u: 1.0, v: 2.9, d: 0.4, yaw: 30, pitch: 10, fitW: 4.7, fitH: 5.0, fov: 40 },
+    landscape: { u: 1.1, v: 2.8, d: 0.4, yaw: 26, pitch: 9, fitW: 5.2, fitH: 4.6, fov: 38 },
+    portrait: { u: 0.5, v: 3.1, d: 0.4, yaw: 22, pitch: 9, fitW: 4.0, fitH: 4.7, fov: 40 },
   },
 };
 
@@ -127,8 +127,8 @@ export const coastWall: WallDef = {
   pelvisMin: 0.92,
   handOffsetV: 0,
   framing: {
-    landscape: { u: 0.6, v: 2.2, d: 0.4, yaw: -30, pitch: 10, fitW: 5.6, fitH: 5.2, fov: 38 },
-    portrait: { u: 0.9, v: 2.65, d: 0.4, yaw: -28, pitch: 9, fitW: 4.5, fitH: 4.8, fov: 40 },
+    landscape: { u: 0.45, v: 2.4, d: 0.4, yaw: -24, pitch: 9, fitW: 4.9, fitH: 4.5, fov: 38 },
+    portrait: { u: 0.7, v: 2.65, d: 0.4, yaw: -24, pitch: 9, fitW: 4.0, fitH: 4.6, fov: 40 },
   },
 };
 

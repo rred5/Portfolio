@@ -18,29 +18,44 @@ import { barn, farmhouse, fence, field, hayBale, silo, treeRow, type Crop } from
 import { wallLayout } from '../layouts';
 import { pickKind, sculptHold } from '../wall/holdShapes';
 import { Holds, type HoldStyle } from '../wall/Holds';
-import { cliffFace, edgeRoll, reliefMesh } from '../wall/surface';
+import { cliffFace, reliefMesh } from '../wall/surface';
 import { plainsWall } from '../walls';
 
 /** Sandstone strata, cream to deep red, bottom to top. */
 const BANDS = ['#e8a15a', '#d98446', '#f0b878', '#c96f3b', '#e59f5c', '#f3c792'];
 const VARNISH = '#6e3f26';
+/** The same strata in shade, for the prow's side. */
+const SIDE_BANDS = ['#b8643a', '#a65a33', '#c47044', '#9c5230'];
 const CHALK = '#fffaf0';
 /** Plains level, far below the start ledge. */
 const PLAINS_Y = -22;
 /** Lower terrace level, between the ledge and the plains. */
 const LOWER_Y = -10;
 /** The mesa's right-hand end (x), past which the view opens up. */
-const MESA_END = 4.2;
+const MESA_END = 2.9;
+/** Face colour-calming zone around the route, so the holds and climber stand out. */
+const ROUTE_ZONE = { u: [-2.2, 2.0], v: [-0.2, 5.0] } as const;
+
+/** Per-strata-unit hash (0..1): how far each 1.2 m unit of the prow stops short of MESA_END. */
+const unitHash = (v: number, salt: number) => {
+  const k = Math.floor(v / 1.2);
+  const x = Math.sin(k * 12.9898 + salt * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
 
 const bandColor = (y: number, x: number) => BANDS[(((Math.floor((y + 0.12 * fbm(x * 0.3, y, 3)) / 0.6) % BANDS.length) + BANDS.length) % BANDS.length)]!;
 
-/** Sandstone features: jugs, huecos and flakes in the rock colour, chalked where hands go. */
+/**
+ * Sandstone features: big pale jugs, huecos and flakes, chalked where hands go, ringed in cyan (the
+ * complement of the orange rock); decoys stay small and rock-coloured so the route reads first.
+ */
 const style: HoldStyle = {
-  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, pocket: 1, flake: 1 }), size: 0.22, color: '#f2bd82', top: CHALK, topAmount: 0.55, rough: 0.14 }),
-  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1, pocket: 1, sloper: 1 }), size: range(r, 0.15, 0.19), color: '#e8a866', top: CHALK, topAmount: 0.4, rough: 0.14 }),
-  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, pocket: 2, sloper: 1, flake: 1 }), size: range(r, 0.1, 0.2), color: pick(r, BANDS), top: CHALK, topAmount: 0.08, rough: 0.16 }),
-  decorCount: 16,
-  decorArea: { u0: -2.8, u1: 2.8, v0: 0.4, v1: 4.6 },
+  interactive: (r) => sculptHold(r, { kind: pickKind(r, { jug: 2, pocket: 1, flake: 1 }), size: 0.3, color: '#f7d3a0', top: CHALK, topAmount: 0.6, rough: 0.12 }),
+  support: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, jug: 1, pocket: 1, sloper: 1 }), size: range(r, 0.19, 0.23), color: '#f2c690', top: CHALK, topAmount: 0.45, rough: 0.13 }),
+  decor: (r) => sculptHold(r, { kind: pickKind(r, { edge: 2, pocket: 2, sloper: 1, flake: 1 }), size: range(r, 0.09, 0.15), color: pick(r, BANDS), top: CHALK, topAmount: 0.05, rough: 0.16 }),
+  glow: () => '#35d6ff',
+  decorCount: 9,
+  decorArea: { u0: -2.4, u1: 1.9, v0: 0.4, v1: 4.6 },
 };
 
 /** Rock colour for any face: strata bands, dark varnish streaks down steep faces, grass on tops. */
@@ -123,16 +138,31 @@ function buildScene() {
   parts.push(
     reliefMesh(def, {
       u0: -16,
-      u1: MESA_END + 0.2,
+      u1: MESA_END,
       v0: -0.4,
       vTop: (u) => 10.2 + 0.4 * Math.sin(u * 0.6),
-      nu: 110,
+      nu: 104,
       nv: 76,
-      roll: edgeRoll({ right: [MESA_END - 1.0, MESA_END + 0.2, 1.4] }),
+      // The mesa's end is squared off with real thickness: each 1.2 m strata unit stops at its own
+      // point, then its side runs 2–3 m back into the rock, so the edge steps like weathered
+      // sandstone instead of ending in a flat cut.
+      corner: {
+        end: (v) => MESA_END - 0.9 * unitHash(v, 1),
+        depth: (v) => 2.2 + 1.2 * unitHash(v, 2),
+        cols: 7,
+        flare: 0.55,
+        rough: 0.22,
+        seed: 17,
+      },
       color: (u, v, n) => {
         if (n.y > 0.62) return v > 9.5 ? '#9cc95a' : '#e9c08a';
         // Cracks and pockets (not the set-back tier above the route) are dark.
         if (v < 4.9 && def.surface(u, v) < -0.2) return '#7a4428';
+        // The prow's side faces: a shade darker, streaked with varnish.
+        if (n.dot(def.right) > 0.6) return fbm(u * 0.8, v * 0.3, 14) > 0.4 ? VARNISH : SIDE_BANDS[Math.abs(Math.floor(v / 0.6)) % SIDE_BANDS.length]!;
+        // Around the route the rock stays in two close tones without varnish, so the holds pop.
+        const calm = u > ROUTE_ZONE.u[0] && u < ROUTE_ZONE.u[1] && v > ROUTE_ZONE.v[0] && v < ROUTE_ZONE.v[1];
+        if (calm) return fbm(u * 0.9, v * 0.9, 13) > 0.1 ? '#e59f5c' : '#e8a864';
         if (fbm(u * 1.1, v * 0.09, 12) > 0.36) return VARNISH;
         return bandColor(v, u);
       },
@@ -144,12 +174,12 @@ function buildScene() {
   const T = 10.2;
   // prettier-ignore
   top.setAttribute('position', new BufferAttribute(new Float32Array([
-    -60, T, -0.6,  MESA_END, T, -0.6,  -24, T, -60,
+    -60, T, -0.6,  MESA_END + 0.5, T, -2.6,  -24, T, -60,
     -60, T, -0.6,  -24, T, -60,  -60, T, -60,
   ]), 3));
   top.computeVertexNormals();
   parts.push(paint(top, '#b8c96a'));
-  parts.push(cliffFace([MESA_END - 0.1, -1.2], [-24, -60], LOWER_Y, 10.4, { segs: 50, rows: 24, rough: 0.7, seed: 31, color: rockColor }));
+  parts.push(cliffFace([MESA_END + 0.55, -2.6], [-24, -60], LOWER_Y, 10.4, { segs: 50, rows: 24, rough: 0.7, seed: 31, color: rockColor }));
 
   // The start ledge (a terrace step), its right end, and the cliff below it.
   const ledgeTop = new PlaneGeometry(20.6, 2.6, 40, 5);
@@ -186,11 +216,11 @@ function buildScene() {
     [-4.1, 2.0, 0.2],
     [-1.8, 1.9, 0.18],
     [1.6, 2.1, 0.22],
-    [2.9, 1.2, 0.26],
+    [2.2, 1.0, 0.24],
   ] as const) {
     parts.push(place(rock(r, s, pick(r, ['#6f9e4a', '#86a95a', '#5e8a44']), 1, 0.2), [x, s * 0.45, z], [0, 0, 0], [1.2, 0.8, 1]));
   }
-  parts.push(place(juniper(r, 0.95), [4.05, 0, 2.15], [0, 1.2, 0]));
+  parts.push(place(juniper(r, 0.95), [MESA_END - 0.2, 0, 2.15], [0, 1.2, 0]));
   for (const [x, z, s] of [
     [-3.4, 1.6, 0.3],
     [-2.6, 2.0, 0.18],
