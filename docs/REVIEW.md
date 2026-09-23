@@ -35,7 +35,7 @@ plus screenshot checks of every view on desktop and phone. v1 is tagged `v1-save
 
 ### 2. Visual polish
 - ~~Climber glances back over the shoulder when a card is pinned (face, cheeks, smile)~~: done.
-- ~~Ropes on the glacier and sea cliff, through ice screws / quickdraws to a coiled pile~~: done.
+- ~~Ropes on the glacier and sea cliff~~: added in v1.1, removed in v1.2 on request.
 - ~~Chalk puff when a hand lands (and when leaving the chalk bag)~~: done.
 - **Island life**: gulls and snowfall over the glacier region are in; lit windows in the city or a
   lighthouse lamp could follow.
@@ -72,3 +72,20 @@ plus screenshot checks of every view on desktop and phone. v1 is tagged `v1-save
 - The 3D pages are client-rendered, so crawlers see only the title and description (the text
   version is linked as an alternate). Rendering each section's text into a visually hidden `<main>`
   on its route would make the 3D pages themselves indexable.
+
+## v1.2 (second round of feedback)
+
+Done: phased climbing moves with planted hands and feet, per-wall flavours and one-hold-at-a-time
+climbing; the Kilter route goes up then across; more varied holds; ropes removed; gym control
+panel, taped problems on the neighbour wall, furniture and three regulars; the Skills terrace above
+farmland (and the island's terrace + farms); the glacier valley view; the sea-cliff harbour and the
+island's fishing market. Details in `docs/SPEC.md` §20.
+
+Open from this round:
+- The views are framed for landscape screens; on phones the portrait cameras keep the route in
+  frame and only show a slice of the view (Skills) or none (About). A phone-specific framing that
+  pans to the view when no card is open could show more.
+- The pinned hold's tag sits below its hold, so it can overlap the climber's head when the climber
+  is on that hold (most visible with the ice axes). Tags could move beside the hold instead.
+- The farmland, valley and harbour add ~15 KB gzipped of code; frame rate on phones is still
+  unmeasured.
