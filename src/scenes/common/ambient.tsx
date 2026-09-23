@@ -17,14 +17,14 @@ import {
   Vector3,
   type ColorRepresentation,
 } from 'three';
-import type { SectionId } from '../../content/types';
+import type { ViewId } from '../../state/types';
 import { rng, range } from '../../lib/rng';
 import { cloud, flat, merge, paint, place } from '../../render/geo';
 import { toonVC } from '../../render/toon';
 import { noInk } from '../../state/registry';
 import { getState } from '../../state/store';
 
-const active = (section: SectionId) => {
+const active = (section: ViewId) => {
   const s = getState();
   return s.shown === section && !s.env.reduced;
 };
@@ -36,7 +36,7 @@ export function DriftingClouds({
   seed,
   scale = [1.6, 3],
 }: {
-  section: SectionId;
+  section: ViewId;
   count: number;
   area: { x: [number, number]; y: [number, number]; z: [number, number] };
   seed: number;
@@ -82,7 +82,7 @@ export function GrassTufts({
   color = '#5cc043',
   seed = 5,
 }: {
-  section: SectionId;
+  section: ViewId;
   spots: [number, number, number][];
   color?: ColorRepresentation;
   seed?: number;
@@ -145,7 +145,7 @@ export function Particles({
   seed,
   additive = false,
 }: {
-  section: SectionId;
+  section: ViewId;
   count: number;
   box: { x: [number, number]; y: [number, number]; z: [number, number] };
   size: number;

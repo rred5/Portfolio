@@ -16,6 +16,7 @@ import {
 import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
+import { Rope, type RopeStyle } from '../../climber/Rope';
 import { smoothstep } from '../../lib/ease';
 import { fbm } from '../../lib/noise';
 import { pick, rng, range, type Rng } from '../../lib/rng';
@@ -216,6 +217,8 @@ function Spindrift() {
 
 const SNOW_BOX = { x: [-7, 7] as [number, number], y: [-0.5, 9] as [number, number], z: [-0.5, 7] as [number, number] };
 
+const ROPE: RopeStyle = { color: '#ff4fa3', protection: 'screw', levels: [1.55, 2.65, 3.75], pile: [-0.95, 0.02, 1.05] };
+
 export default function GlacierScene({ onReady }: SectionSceneProps) {
   const layout = wallLayout('experience');
   const world = useMemo(buildScene, []);
@@ -249,6 +252,7 @@ export default function GlacierScene({ onReady }: SectionSceneProps) {
       <Spindrift />
       <Holds layout={layout} style={style} />
       <Climber layout={layout} outfit={OUTFITS.glacier} />
+      <Rope layout={layout} style={ROPE} />
     </group>
   );
 }

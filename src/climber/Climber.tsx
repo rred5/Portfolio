@@ -26,6 +26,7 @@ import { clamp01, easeInOutCubic, lerp } from '../lib/ease';
 import { solveTwoBone } from '../lib/ik';
 import { box, flat, merge, paint, place } from '../render/geo';
 import { toon, toonVC } from '../render/toon';
+import type { SectionId } from '../content/types';
 import type { WallLayout } from '../scenes/layouts';
 import { BODY, type Pose, type Side, type Spot } from '../scenes/wall/route';
 import { coverDepth, toWorld } from '../scenes/wall/types';
@@ -324,6 +325,9 @@ function puff(list: Chip[], at: Vector3, normal: Vector3, n: number) {
 /** Glance over the shoulder: ease in, hold, ease out (seconds). */
 const GLANCE = { delay: 0.2, in: 0.25, hold: 0.9, out: 0.35, turn: (130 * Math.PI) / 180 };
 
+/** Where the rope ties in, per section, updated every frame the climber is shown (read by Rope). */
+export const harnessPos: Partial<Record<SectionId, Vector3>> = {};
+
 export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit }) {
   const { def, route } = layout;
   const rig = useMemo(() => buildRig(outfit), [outfit]);
@@ -510,6 +514,8 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
     const bulk = puffy ? 1.2 : 1;
     // Chalk bag hangs off the back of the harness belt.
     J.bag.copy(J.pelvis).addScaledVector(yb, 0.02).addScaledVector(zb, 0.2);
+    // Rope tie-in at the front of the harness (between the climber and the wall).
+    (harnessPos[def.section] ??= new Vector3()).copy(J.pelvis).addScaledVector(yb, 0.06).addScaledVector(zb, -0.13);
 
     for (const sd of ['L', 'R'] as const) {
       const limb: Limb = sd === 'L' ? 'lh' : 'rh';

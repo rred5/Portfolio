@@ -24,7 +24,9 @@ import { clock } from '../../state/clock';
 import { noInk, outlineTargets, pickables, type Pickable } from '../../state/registry';
 import { getState } from '../../state/store';
 import { registerAtmosphere } from '../atmosphere';
+import { Particles } from '../common/ambient';
 import { buildBoat, buildClouds, buildHub, buildIsland } from './build';
+import { Gulls } from './Gulls';
 import { REGIONS } from './layout';
 
 /** Label anchors, lifted with their region. Read by the DOM overlay. */
@@ -217,6 +219,9 @@ export function Island() {
       <group ref={boatRef}>
         <mesh geometry={scenery.boat} material={toonVC()} castShadow />
       </group>
+      <Gulls />
+      {/* Light snowfall over the glacier region. */}
+      <Particles section="island" count={70} box={{ x: [-7.5, -0.8], y: [1, 8], z: [-7.5, -0.8] }} size={0.14} color="#ffffff" opacity={0.9} fall={0.6} drift={0.15} seed={29} />
       {regionObjects.map((r) => (
         <group key={r.def.section}>
           <primitive object={r.group} />
