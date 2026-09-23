@@ -22,7 +22,7 @@ import {
   type Material,
 } from 'three';
 import { motion } from '../config/motion';
-import { clamp01, easeInOutCubic, lerp } from '../lib/ease';
+import { clamp01, easeInOutCubic } from '../lib/ease';
 import { solveTwoBone } from '../lib/ik';
 import { box, flat, merge, paint, place } from '../render/geo';
 import { toon, toonVC } from '../render/toon';
