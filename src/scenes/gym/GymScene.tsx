@@ -299,6 +299,7 @@ export default function GymScene({ onReady }: SectionSceneProps) {
         shadow-camera-near={1}
         shadow-camera-far={20}
         shadow-bias={-0.001}
+        shadow-normalBias={0.04}
       />
       <mesh geometry={room} material={toonVC()} receiveShadow castShadow />
       {decor.planes.map((p, i) => (

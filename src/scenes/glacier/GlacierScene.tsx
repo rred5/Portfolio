@@ -62,6 +62,26 @@ function jaggedPeak(r: Rng, radius: number, height: number, snowFrom: number): B
   return paintFaces(flat(g), (c, n) => (c.y > height * (snowFrom - 0.5) || n.y > 0.75 ? '#f4f8ff' : c.y > 0 ? '#6b7089' : '#7c8199'));
 }
 
+/** Tall rock rib with snow on every ledge, base at y = 0. */
+function buttress(r: Rng, at: [number, number, number], w: number, h: number, d: number, lean: number): BufferGeometry {
+  const g = new IcosahedronGeometry(1, 2);
+  jitter(g, 0.13, r);
+  const m = place(flat(g), [0, h * 0.45, 0], [0, 0, 0], [w, h * 0.55, d]);
+  // Lean the top over a little and taper it.
+  const p = m.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    const k = Math.max(0, y) / h;
+    p.setX(i, p.getX(i) * (1 - 0.35 * k) + lean * k * 2);
+  }
+  m.computeVertexNormals();
+  const tones = ['#6b7089', '#7c8199', '#5f6480'];
+  return place(
+    paintFaces(m, (c, n) => (n.y > 0.45 ? '#f4f8ff' : tones[Math.abs(Math.floor(c.y * 1.3 + fbm(c.x, c.z, 35) * 2)) % 3]!)),
+    at,
+  );
+}
+
 function buildScene() {
   const def = glacierWall;
   const r = rng(515);
@@ -76,7 +96,8 @@ function buildScene() {
     roll: irregularRoll({ half: 5.4, band: 1.9, depth: 2.6, amp: 0.9, seed: 13, top: [1.2, 1.4] }),
     color: (u, v, n) => {
       if (n.dot(up) > 0.55) return '#f4f8ff';
-      if (fbm(u * 0.45 + 5, v * 0.45, 31) > 0.46) return fbm(u, v, 32) > 0 ? '#5a5f7a' : '#6b7089';
+      // Rock shows through only towards the sides, where the ice meets the buttresses.
+      if (Math.abs(u) > 3.6 && fbm(u * 0.45 + 5, v * 0.45, 31) > 0.25 - (Math.abs(u) - 3.6) * 0.3) return fbm(u, v, 32) > 0 ? '#5a5f7a' : '#6b7089';
       const band = fbm(u * 1.3, v * 0.14, 33) + 0.25 * fbm(u * 3, v * 3, 34);
       return ICE[Math.floor((band + 1) * 2.5) % ICE.length]!;
     },
@@ -85,15 +106,15 @@ function buildScene() {
 
   // Snow-loaded ledges and icicle curtains beneath them (wall space).
   const ledges: [number, number, number][] = [
-    [-1.9, 3.05, 1.6],
+    [-1.6, 3.05, 1.3],
     [1.7, 4.75, 1.7],
-    [-2.9, 5.6, 1.2],
+    [-2.1, 5.5, 1.0],
   ];
   for (const [u, v, w] of ledges) {
     const d = def.surface(u, v);
     const g = new IcosahedronGeometry(1, 1);
     jitter(g, 0.08, r);
-    parts.push(inWall(def, place(paint(flat(g), '#f4f8ff'), [u, v, d + 0.05], [0, 0, 0], [w / 2, 0.1, 0.2])));
+    parts.push(inWall(def, place(paint(flat(g), '#f4f8ff'), [u, v, d - 0.1], [0, 0, 0], [w / 2, 0.12, 0.38])));
     for (let k = 0; k < 7; k++) {
       const iu = u + range(r, -w / 2.4, w / 2.4);
       const len = range(r, 0.15, 0.4);
@@ -103,6 +124,26 @@ function buildScene() {
 
   // Mountain mass behind the face, set back so its snowy summit shows above.
   parts.push(place(jaggedPeak(r, 7, 16, 0.5), [1.5, 5, -9]));
+
+  // Rock buttresses either side, so the ice reads as a frozen flow down a gully in the mountain
+  // rather than a slab standing on the snow.
+  parts.push(buttress(r, [-5.5, 0, -0.1], 2.3, 7.8, 2.4, 0.25));
+  parts.push(buttress(r, [5.3, 0, 0.1], 2.1, 6.6, 2.2, -0.3));
+  parts.push(buttress(r, [-7.8, 0, -1.6], 2.2, 9.5, 2.4, 0.6));
+  parts.push(buttress(r, [7.6, 0, -1.2], 2.4, 8.4, 2.4, -0.5));
+  // Drifted snow along the foot of the ice: low in the middle where the climber stands, deeper
+  // against the rock.
+  for (const [x, z, w, h] of [
+    [0, 0.3, 3.2, 0.14],
+    [-2.9, 0.45, 1.8, 0.32],
+    [2.8, 0.5, 1.7, 0.3],
+    [-4.4, 0.7, 1.6, 0.55],
+    [4.3, 0.75, 1.5, 0.5],
+  ] as const) {
+    const g = new IcosahedronGeometry(1, 2);
+    jitter(g, 0.05, r);
+    parts.push(place(paintFaces(flat(g), (_c, n) => (n.y > 0.4 ? '#f7faff' : '#e1eafa')), [x, 0, z], [0, 0, 0], [w, h, 0.75]));
+  }
 
   // Snow slope at the base, dropping away at the sides and front.
   const snowG = new PlaneGeometry(40, 30, 40, 30);
@@ -206,6 +247,7 @@ export default function GlacierScene({ onReady }: SectionSceneProps) {
         shadow-camera-near={1}
         shadow-camera-far={40}
         shadow-bias={-0.001}
+        shadow-normalBias={0.04}
       />
       <SkyDome top="#7d95e0" horizon="#e6e0ff" bottom="#d8d0f5" />
       <mesh geometry={world} material={toonVC()} receiveShadow castShadow />

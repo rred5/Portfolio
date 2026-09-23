@@ -209,6 +209,7 @@ export function Island() {
         shadow-camera-near={1}
         shadow-camera-far={60}
         shadow-bias={-0.0015}
+        shadow-normalBias={0.04}
       />
       <mesh geometry={waterGeo} material={water} position={[0, 0, 0]} receiveShadow={false} />
       <mesh geometry={scenery.hub} material={toonVC()} castShadow receiveShadow />

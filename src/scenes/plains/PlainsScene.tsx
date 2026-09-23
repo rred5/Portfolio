@@ -1,6 +1,6 @@
 // Skills: sunny plains, sandstone boulder (spec §7.3).
 import { useEffect, useMemo } from 'react';
-import { CylinderGeometry, Fog, IcosahedronGeometry, PlaneGeometry, type BufferGeometry } from 'three';
+import { BufferAttribute, BufferGeometry, CylinderGeometry, Fog, IcosahedronGeometry, PlaneGeometry } from 'three';
 import type { SectionSceneProps } from '../../app/SectionHost';
 import { Climber } from '../../climber/Climber';
 import { OUTFITS } from '../../climber/outfits';
@@ -18,7 +18,7 @@ import { Holds, type HoldStyle } from '../wall/Holds';
 import { irregularRoll, reliefMesh } from '../wall/surface';
 import { plainsWall } from '../walls';
 
-const BANDS = ['#e8a15a', '#d98a4a', '#f0b878', '#dd9552'];
+const BANDS = ['#e8a15a', '#df9853', '#efb271', '#e59f5c'];
 
 const CHALK = '#fffaf0';
 
@@ -48,6 +48,48 @@ function sandstoneTower(r: Rng, height: number, radius: number): BufferGeometry 
   return merge(parts);
 }
 
+/** Rounded sandstone mass with strata bands and a grassy cap, base at y = 0. */
+function outcrop(r: Rng, w: number, h: number, d: number): BufferGeometry {
+  const g = new IcosahedronGeometry(1, 2);
+  jitter(g, 0.1, r);
+  const m = place(flat(g), [0, h * 0.45, 0], [0, 0, 0], [w, h * 0.55, d]);
+  return paintFaces(m, (c, n) => {
+    if (n.y > 0.6 && c.y > h * 0.55) return fbm(c.x * 2, c.z * 2, 46) > 0 ? '#8cc956' : '#7dbb4a';
+    return BANDS[Math.abs(Math.floor((c.y + 0.08 * fbm(c.x, c.z, 47)) / 0.55)) % BANDS.length]!;
+  });
+}
+
+/** Worn sandy ground in front of the boulder, with a ragged edge fading into the grass. */
+function apron(r: Rng): BufferGeometry {
+  const rings = 6;
+  const segs = 40;
+  const pts = (i: number, j: number) => {
+    const a = (j / segs) * Math.PI;
+    const k = i / rings;
+    const wob = 1 + 0.18 * fbm(Math.cos(a) * 2, Math.sin(a) * 2, 48);
+    const x = Math.cos(a) * 4.6 * k * wob;
+    const z = 0.05 + Math.sin(a) * 1.9 * k * wob;
+    return [x, 0.012 + 0.01 * r(), z] as const;
+  };
+  const pos: number[] = [];
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const a = pts(i, j);
+      const b = pts(i + 1, j);
+      const c = pts(i + 1, j + 1);
+      const d = pts(i, j + 1);
+      pos.push(...a, ...c, ...b, ...a, ...d, ...c);
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  g.computeVertexNormals();
+  return paintFaces(g, (c) => {
+    const f = Math.hypot(c.x / 4.6, c.z / 1.9);
+    return f > 0.82 ? '#b8c96a' : fbm(c.x * 1.5, c.z * 1.5, 49) > 0.15 ? '#d9b27a' : '#e2bd86';
+  });
+}
+
 function buildScene() {
   const def = plainsWall;
   const r = rng(808);
@@ -63,7 +105,6 @@ function buildScene() {
       if (n.y > 0.62 && v > 3.6) return fbm(u * 2, v, 7) > 0 ? '#8cc956' : '#7dbb4a';
       const depth = def.surface(u, v);
       if (depth < -0.07) return '#9a5a34';
-      if (fbm(u * 1.4 + 3, v * 1.4, 12) > 0.42) return '#9cb86a';
       const band = Math.floor((v + 0.1 * fbm(u, v, 3)) / 0.55);
       return BANDS[((band % BANDS.length) + BANDS.length) % BANDS.length]!;
     },
@@ -93,6 +134,31 @@ function buildScene() {
   const props: BufferGeometry[] = [face, back, ground];
   props.push(place(box(1.5, 0.28, 1.15, '#e4572e'), [0.1, 0.14, 0.95], [0, 0.08, 0]));
   props.push(place(box(1.5, 0.04, 1.15, '#3a4a6b'), [0.1, 0.29, 0.95], [0, 0.08, 0]));
+
+  // Integration with the ground: a worn sandy apron at the base (where climbers stand and pads
+  // go), talus that has fallen off the face, and the boulder as part of a bigger outcrop.
+  props.push(apron(r));
+  for (let i = 0; i < 16; i++) {
+    const x = range(r, -4.3, 4.3);
+    const z = range(r, 0.15, 1.7);
+    if (Math.abs(x - 0.1) < 1.05 && z < 1.7) continue;
+    const s = range(r, 0.12, 0.38);
+    props.push(place(rock(r, s, pick(r, BANDS), 0, 0.3), [x, s * 0.25, z], [0, r() * 3, 0], [1, 0.7, 1]));
+  }
+  props.push(place(outcrop(r, 2.6, 4.2, 2.2), [-6.2, 0, -1.6], [0, 0.3, 0]));
+  props.push(place(outcrop(r, 2.0, 3.0, 1.8), [7.4, 0, -2.8], [0, -0.4, 0]));
+  props.push(place(outcrop(r, 1.2, 1.4, 1.1), [-4.6, 0, 0.6], [0, 0.9, 0]));
+  props.push(place(outcrop(r, 0.9, 1.0, 0.8), [5.4, 0, -0.4], [0, 0.2, 0]));
+  for (const [x, z, s] of [
+    [-5.1, 1.4, 0.55],
+    [-3.9, 1.9, 0.4],
+    [6.3, -0.9, 0.5],
+    [3.6, -0.3, 0.35],
+    [-6.8, 0.6, 0.6],
+    [7.2, 0.9, 0.55],
+  ] as const) {
+    props.push(place(rock(r, s * 0.6, '#4fae3f', 1, 0.2), [x, s * 0.27, z], [0, 0, 0], [1.2, 0.8, 1]));
+  }
   // Background towers, hoodoos, boulders and trees (sides and behind).
   const towers: [number, number, number, number][] = [
     [-9, -8, 7, 1.6],
@@ -154,6 +220,7 @@ export default function PlainsScene({ onReady }: SectionSceneProps) {
         shadow-camera-near={1}
         shadow-camera-far={40}
         shadow-bias={-0.001}
+        shadow-normalBias={0.04}
       />
       <SkyDome top="#3f9fe6" horizon="#cfefff" bottom="#cfefff" />
       <mesh geometry={world} material={toonVC()} receiveShadow castShadow />

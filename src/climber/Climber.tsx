@@ -28,7 +28,7 @@ import { box, flat, merge, paint, place } from '../render/geo';
 import { toon, toonVC } from '../render/toon';
 import type { WallLayout } from '../scenes/layouts';
 import { BODY, type Pose, type Side, type Spot } from '../scenes/wall/route';
-import { toWorld } from '../scenes/wall/types';
+import { coverDepth, toWorld } from '../scenes/wall/types';
 import { noInk } from '../state/registry';
 import { getState } from '../state/store';
 import type { Outfit } from './outfits';
@@ -468,8 +468,9 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       const spot = cur[limb];
       const isReach = a.reach === sd;
       const arc = isReach && t < 1 && !reduced ? Math.sin(Math.PI * limbT[limb]) * 0.16 : 0;
-      toWorld(def, spot.u, spot.v, 0.03, J.hold[sd]);
-      toWorld(def, spot.u, spot.v + def.handOffsetV, D.hand + arc, J.ha[sd]);
+      const cover = coverDepth(def, spot.u, spot.v);
+      toWorld(def, spot.u, spot.v, 0.03 + cover, J.hold[sd]);
+      toWorld(def, spot.u, spot.v + def.handOffsetV, D.hand + arc + cover, J.ha[sd]);
       if (chalkW > 0 && a.chalkHand === sd && rig.chalk) {
         tmp.copy(J.bag).addScaledVector(yb, 0.08).addScaledVector(xb, sg * 0.03);
         J.ha[sd].lerp(tmp, chalkW);
@@ -478,7 +479,7 @@ export function Climber({ layout, outfit }: { layout: WallLayout; outfit: Outfit
       solveTwoBone(J.sh[sd], J.ha[sd], BODY.upperArm, BODY.forearm, J.pole, J.el[sd], J.ha[sd]);
 
       const fl: Limb = sd === 'L' ? 'lf' : 'rf';
-      toWorld(def, cur[fl].u, cur[fl].v, D.foot, J.ft[sd]);
+      toWorld(def, cur[fl].u, cur[fl].v, D.foot + coverDepth(def, cur[fl].u, cur[fl].v), J.ft[sd]);
       J.pole.copy(J.hip[sd]).addScaledVector(def.right, sg * 0.9).addScaledVector(def.normal, 0.6).addScaledVector(def.up, 0.2);
       solveTwoBone(J.hip[sd], J.ft[sd], BODY.thigh, BODY.shin, J.pole, J.kn[sd], J.ft[sd]);
     }

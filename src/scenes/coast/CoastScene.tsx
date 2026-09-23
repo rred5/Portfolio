@@ -93,6 +93,35 @@ function buildScene() {
   };
   parts.push(stack(13, -24, 14, 2.4));
   parts.push(stack(22, -46, 10, 1.8));
+  parts.push(stack(8.6, -5.5, 6.5, 1.1));
+
+  // The cliff's right end steps down into the sea as a rocky shoulder instead of ending in a cut.
+  const shoulder = (x: number, z: number, top: number, w: number, d: number) => {
+    const g = new IcosahedronGeometry(1, 2);
+    jitter(g, 0.09, r);
+    const h = top - SEA_Y + 0.8;
+    return place(
+      paintFaces(flat(g), (c, n) => (n.y > 0.62 && c.y > 0.2 ? '#8cc956' : c.y < -0.55 ? '#5e3e36' : ROCK[Math.abs(Math.floor(c.y * 2.2 + fbm(c.x, c.z, 9))) % 4]!)),
+      [x, SEA_Y - 0.8 + h * 0.5, z],
+      [0, r() * 0.6, 0],
+      [w, h * 0.5, d],
+    );
+  };
+  parts.push(shoulder(3.6, -1.6, 5.4, 1.9, 2.4));
+  parts.push(shoulder(5.0, -2.4, 3.2, 1.8, 2.2));
+  parts.push(shoulder(6.3, -3.0, 0.9, 1.6, 2.0));
+  parts.push(shoulder(7.2, -2.2, -1.6, 1.3, 1.4));
+
+  // Wet boulders along the waterline, darker below the tide mark.
+  for (let i = 0; i < 12; i++) {
+    const x = range(r, -6, 7.5);
+    const z = x > 3.5 ? range(r, -1.5, 2.5) : range(r, 0.6, 2.4);
+    if (Math.abs(x - 0.1) < 1.4 && z < 1.6) continue;
+    const s = range(r, 0.3, 0.7);
+    const g = new IcosahedronGeometry(1, 1);
+    jitter(g, 0.2, r);
+    parts.push(place(paintFaces(flat(g), (c, n) => (n.y > 0.5 && c.y > 0 ? '#a8664f' : '#5e3e36')), [x, SEA_Y + s * 0.2, z], [0, r() * 3, 0], [s * 1.3, s, s]));
+  }
   for (let i = 0; i < 7; i++) {
     const x = range(r, -110, -30);
     const z = range(r, -150, -50);
@@ -211,6 +240,7 @@ export default function CoastScene({ onReady }: SectionSceneProps) {
         shadow-camera-near={1}
         shadow-camera-far={40}
         shadow-bias={-0.001}
+        shadow-normalBias={0.04}
       />
       <SkyDome top="#ff9e6b" horizon="#ffd6a0" bottom="#ffd6a0" />
       <primitive object={sun} />

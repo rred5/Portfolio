@@ -25,7 +25,7 @@ import { holdPositions, noInk, outlineTargets, pickables, type Pickable } from '
 import { getState } from '../../state/store';
 import type { WallLayout } from '../layouts';
 import type { Spot } from './route';
-import { surfaceNormal, toWorld, type WallDef } from './types';
+import { coverDepth, surfaceNormal, toWorld, type WallDef } from './types';
 
 export const CUE = '#ffd23f';
 
@@ -64,7 +64,7 @@ export function onWall(def: WallDef, g: BufferGeometry, u: number, v: number, d 
     xAxis.copy(x2);
     yAxis.copy(y2);
   }
-  const p = toWorld(def, u, v, d);
+  const p = toWorld(def, u, v, d + coverDepth(def, u, v));
   m4.makeBasis(xAxis, yAxis, zAxis).setPosition(p);
   g.applyMatrix4(m4);
   return g;
@@ -94,8 +94,9 @@ function glowDisc(def: WallDef, u: number, v: number, radius: number): BufferGeo
   const pt = (i: number, j: number) => {
     const rr = (i / rings) * radius;
     const a = (j / segs) * Math.PI * 2;
-    // Lifted a few cm: the relief mesh is a coarse triangulation of the surface function.
-    const p = toWorld(def, u + Math.cos(a) * rr, v + Math.sin(a) * rr, 0.04);
+    const pu = u + Math.cos(a) * rr;
+    const pv = v + Math.sin(a) * rr;
+    const p = toWorld(def, pu, pv, coverDepth(def, pu, pv) + 0.03);
     return [p.x, p.y, p.z, i / rings] as const;
   };
   for (let i = 0; i < rings; i++) {
@@ -177,7 +178,7 @@ export function Holds({ layout, style }: { layout: WallLayout; style: HoldStyle 
     const holds: InteractiveHold[] = route.slots.map((slot, i) => {
       const g = style.interactive(r, i, n);
       g.computeBoundingSphere();
-      const center = toWorld(def, slot.u, slot.v, lift);
+      const center = toWorld(def, slot.u, slot.v, lift + coverDepth(def, slot.u, slot.v));
       const local = g.clone();
       onWall(def, local, slot.u, slot.v, lift);
       local.translate(-center.x, -center.y, -center.z);

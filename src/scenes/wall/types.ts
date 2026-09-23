@@ -53,6 +53,17 @@ export function toWorld(def: WallDef, u: number, v: number, d: number, out = new
     .addScaledVector(def.normal, depth);
 }
 
+/**
+ * Extra depth needed at (u, v) to sit on top of the rendered relief. The relief mesh is a coarse
+ * triangulation of `surface`, so narrow cracks and strata steps in the function are shallower (or
+ * missing) in the mesh; anything placed exactly on the function there would be buried.
+ */
+export function coverDepth(def: WallDef, u: number, v: number): number {
+  const s = def.surface(u, v);
+  const top = Math.max(s, def.surface(u + 0.12, v), def.surface(u - 0.12, v), def.surface(u, v + 0.15), def.surface(u, v - 0.15));
+  return top - s;
+}
+
 /** Surface normal in world space, estimated from the relief. */
 export function surfaceNormal(def: WallDef, u: number, v: number, out = new Vector3()): Vector3 {
   const e = 0.03;
