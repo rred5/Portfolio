@@ -4,10 +4,10 @@
 import { BufferAttribute, BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3, type ColorRepresentation } from 'three';
 import type { EnvId } from '../../config/sections';
 import { fbm } from '../../lib/noise';
-import { pick, rng, range, type Rng } from '../../lib/rng';
+import { rng, range, type Rng } from '../../lib/rng';
 import { smoothstep } from '../../lib/ease';
 import { box, cloud, cone, cylinder, flat, jitter, merge, paint, paintFaces, pine, place, rock, tree } from '../../render/geo';
-import { barn, farmhouse, fence, field, hayBale, silo, type Crop } from '../common/farm';
+import { barn, farmhouse, fence, field, silo, type Crop } from '../common/farm';
 import { barrel, fishCrate, fishingBoat, pier, stall } from '../common/harbor';
 import { boundaryWobble, islandRadius, REGIONS, type RegionDef } from './layout';
 
