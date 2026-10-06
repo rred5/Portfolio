@@ -1,0 +1,80 @@
+// Screenshot driver: runs scripted steps in the locally installed Chrome (playwright-core, no browser
+// download). Usage:
+//   node scripts/screenshots.mjs <steps.json> <outDir>
+// steps.json: [{ "viewport": [1280, 800], "dpr": 1, "mobile": false, "reduced": false }, { "goto": "/" },
+//   { "wait": 1500 }, { "hover": [x, y] }, { "click": [x, y] }, { "clickSel": ".region-label" },
+//   { "focusSel": "..." }, { "key": "Escape" }, { "eval": "js" }, { "shot": "name", "clip": [x, y, w, h] }]
+// Env: BASE (default http://localhost:4400).
+import fs from 'node:fs';
+import path from 'node:path';
+import { chromium } from 'playwright-core';
+
+const [stepsFile, outDir] = process.argv.slice(2);
+const base = process.env.BASE ?? 'http://localhost:4400';
+const steps = JSON.parse(fs.readFileSync(stepsFile, 'utf8'));
+fs.mkdirSync(outDir, { recursive: true });
+
+const browser = await chromium.launch({
+  channel: 'chrome',
+  headless: true,
+  args: ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11', '--enable-unsafe-swiftshader'],
+});
+
+const logs = [];
+let context;
+let page;
+
+async function newPage(opts) {
+  if (context) await context.close();
+  context = await browser.newContext({
+    viewport: { width: opts.viewport?.[0] ?? 1280, height: opts.viewport?.[1] ?? 800 },
+    deviceScaleFactor: opts.dpr ?? 1,
+    isMobile: !!opts.mobile,
+    hasTouch: !!opts.mobile,
+    reducedMotion: opts.reduced ? 'reduce' : 'no-preference',
+  });
+  page = await context.newPage();
+  page.on('console', (m) => {
+    if (m.type() === 'error' || m.type() === 'warning') logs.push(`${m.type()}: ${m.text().slice(0, 400)}`);
+  });
+  page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
+}
+
+for (const step of steps) {
+  if (step.viewport) await newPage(step);
+  else if (step.goto) await page.goto(base + step.goto, { waitUntil: 'load' });
+  else if (step.wait) await page.waitForTimeout(step.wait);
+  else if (step.hover) await page.mouse.move(step.hover[0], step.hover[1], { steps: 4 });
+  else if (step.click) await page.mouse.click(step.click[0], step.click[1]);
+  else if (step.tap) await page.touchscreen.tap(step.tap[0], step.tap[1]);
+  else if (step.clickSel) await page.locator(step.clickSel).first().click();
+  else if (step.hoverSel) await page.locator(step.hoverSel).first().hover();
+  else if (step.focusSel) await page.locator(step.focusSel).first().focus();
+  else if (step.key) await page.keyboard.press(step.key);
+  else if (step.eval) logs.push(`eval: ${JSON.stringify(await page.evaluate(step.eval))}`);
+  else if (step.burst) {
+    // { "burst": { "name": "x", "count": 8, "every": 150, "clip": [x, y, w, h], "cols": 4 } }:
+    // frames of an animation, tiled into one numbered contact sheet.
+    const { name, count, every, clip, cols = 4 } = step.burst;
+    const frames = [];
+    for (let i = 0; i < count; i++) {
+      const buf = await page.screenshot({ clip: { x: clip[0], y: clip[1], width: clip[2], height: clip[3] } });
+      frames.push(buf.toString('base64'));
+      await page.waitForTimeout(every);
+    }
+    const sheet = await context.newPage();
+    await sheet.setViewportSize({ width: clip[2] * cols, height: clip[3] * Math.ceil(count / cols) });
+    const tiles = frames
+      .map((f, i) => `<div style="position:relative"><img src="data:image/png;base64,${f}" style="display:block;width:${clip[2]}px"><b style="position:absolute;left:4px;top:2px;font:bold 14px sans-serif;color:#fff;background:#000a;padding:0 4px">${i}</b></div>`)
+      .join('');
+    await sheet.setContent(`<body style="margin:0;display:grid;grid-template-columns:repeat(${cols},${clip[2]}px)">${tiles}</body>`);
+    await sheet.screenshot({ path: path.join(outDir, `${name}.png`) });
+    await sheet.close();
+  } else if (step.shot) {
+    const clip = step.clip ? { x: step.clip[0], y: step.clip[1], width: step.clip[2], height: step.clip[3] } : undefined;
+    await page.screenshot({ path: path.join(outDir, `${step.shot}.png`), clip });
+  }
+}
+
+await browser.close();
+console.log(logs.length ? logs.join('\n') : 'no console errors');

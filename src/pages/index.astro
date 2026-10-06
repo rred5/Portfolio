@@ -1,0 +1,10 @@
+---
+import AppPage from '../layouts/AppPage.astro';
+import { profile } from '../content/portfolio';
+---
+
+<AppPage
+  initial="island"
+  title={`${profile.name} · ${profile.title}`}
+  description={`${profile.name}: ${profile.summary}`}
+/>

@@ -1,0 +1,70 @@
+/* Shared design tokens (spec §5). */
+:root {
+  --ink: #151515;
+  --cream: #fff8ec;
+  --cream-2: #f6ead3;
+  --white: #ffffff;
+  --cue: #ffd23f;
+  --muted: #5b5750;
+
+  --accent-projects: #ff4fa3;
+  --accent-experience: #3e8fd6;
+  --accent-skills: #58b83c;
+  --accent-about: #ff8a5b;
+
+  --font-display: 'Lilita One', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius: 12px;
+  --border-w: 3px;
+  --border: var(--border-w) solid var(--ink);
+  --shadow: 4px 4px 0 var(--ink);
+  --shadow-sm: 2px 2px 0 var(--ink);
+
+  --topbar-h: 64px;
+  --gutter: 24px;
+  --card-w: clamp(340px, 30vw, 440px);
+  --dock-h: 76px;
+  --rail-w: 72px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (max-width: 819px), (orientation: portrait) {
+  :root {
+    --topbar-h: 52px;
+    --gutter: 12px;
+    --dock-h: 68px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--cream);
+}
+
+:focus-visible {
+  outline: 3px solid var(--cue);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
