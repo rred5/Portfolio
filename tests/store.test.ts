@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { motion } from '../src/config/motion';
+import { itemsFor } from '../src/content/query';
 import { useStore } from '../src/state/store';
 
 const s = () => useStore.getState();
+
+// Item ids come from portfolio.ts, so editing the content does not break these tests.
+const projectIds = itemsFor('projects').map((i) => i.id);
+const first = projectIds[0]!;
+const second = projectIds[1]!;
+const last = projectIds[projectIds.length - 1]!;
+const skillId = itemsFor('skills')[0]!.id;
 
 beforeEach(() => {
   useStore.setState({
@@ -38,8 +46,8 @@ describe('navigation', () => {
   it('section to section is a switch and closes the pinned card', () => {
     s().navigate('projects', { history: 'none' });
     finish();
-    s().pin('project-a', 'pointer');
-    expect(s().pinnedItem).toBe('project-a');
+    s().pin(first, 'pointer');
+    expect(s().pinnedItem).toBe(first);
     s().navigate('experience', { history: 'none' });
     expect(s().transition?.kind).toBe('switch');
     expect(s().pinnedItem).toBeNull();
@@ -66,28 +74,28 @@ describe('holds and cards', () => {
   });
 
   it('hover moves the climber and the climber stays after hover ends', () => {
-    s().setHoverItem('project-b');
-    expect(s().climberItem.projects).toBe('project-b');
+    s().setHoverItem(second);
+    expect(s().climberItem.projects).toBe(second);
     s().setHoverItem(null);
-    expect(s().climberItem.projects).toBe('project-b');
+    expect(s().climberItem.projects).toBe(second);
   });
 
   it('pinned card stays while hovering another hold; clicking another hold replaces it', () => {
-    s().pin('project-a', 'pointer');
-    s().setHoverItem('project-c');
-    expect(s().pinnedItem).toBe('project-a');
-    expect(s().climberItem.projects).toBe('project-c');
-    s().pin('project-d', 'pointer');
-    expect(s().pinnedItem).toBe('project-d');
+    s().pin(first, 'pointer');
+    s().setHoverItem(last);
+    expect(s().pinnedItem).toBe(first);
+    expect(s().climberItem.projects).toBe(last);
+    s().pin(last, 'pointer');
+    expect(s().pinnedItem).toBe(last);
   });
 
   it('ignores items from other sections', () => {
-    s().pin('languages', 'pointer');
+    s().pin(skillId, 'pointer');
     expect(s().pinnedItem).toBeNull();
   });
 
   it('close clears the pinned card', () => {
-    s().pin('project-a', 'keyboard');
+    s().pin(first, 'keyboard');
     s().closeCard();
     expect(s().pinnedItem).toBeNull();
   });

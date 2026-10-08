@@ -55,7 +55,7 @@ function CardInner({ item, mode, onClose, closeRef }: { item: Item; mode: Mode; 
         )}
       </header>
       <div className="card__body">
-        <CardBody item={item} />
+        <CardBody item={item} preview={mode === 'preview'} />
       </div>
       {mode === 'pinned' && <CardSteps item={item} />}
     </>
