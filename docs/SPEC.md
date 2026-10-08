@@ -108,11 +108,12 @@ information**. The 3D scenes, the cards, and the text version all read from it.
 
 ```ts
 interface Profile {
-  name: string;               // "Your Name" placeholder
+  name: string;               // "Ryan Reddy"
   title: string;              // "Developer Portfolio"
   summary: string;            // 1–2 sentences, used in llms.txt and the About card
   location?: string;
   email: string;
+  phone?: string;             // Contact card + text version, when set
   links: Link[];              // GitHub, LinkedIn, etc.
   resumeUrl?: string;         // PDF in /public
 }
@@ -183,12 +184,12 @@ export const sections: Section[];
 export const items: Item[];
 ```
 
-**Limits:** 3–8 items per section, enforced by the scene layouts (§8.1). Skills uses one item per **skill
-group**, not per skill.
+**Limits:** 2–8 items per section (v1.4: the minimum was 3), enforced by the scene layouts (§8.1).
+Skills uses one item per **skill group**, not per skill.
 
-**Placeholder set for v1:** Projects 5, Experience 3 (2 jobs + education as an experience item), Skills 4
-groups, About 3 (Who I am, Off the keyboard, Get in touch). All placeholder strings start with
-`[Placeholder]` so they're easy to find.
+**Content set (v1.4, from the Oct 7 2026 resume):** Projects 4, Experience 3 (CAMP, Purdue, Purdue VIP),
+Skills 4 groups, About 3 (Who I am, Awards & honors, Get in touch). v1 shipped with `[Placeholder]`
+strings instead.
 
 **Validation (build fails on error):** unique ids; every item is bound to exactly one interactive
 hold in its section layout and every interactive hold is bound to an item; per-section count within the
@@ -811,3 +812,8 @@ Small calls made while building, for review:
 | Wall edges (v1.3) | The Skills, Experience and About faces end in a squared-off corner with thickness (`reliefMesh` `corner`): each strata unit, ice-face block or ledge stops at its own point and its side runs 2–3 m back into the rock, flaring toward the camera, so the edge steps instead of ending in a flat cut | The edges read as flat cut-outs |
 | Climbing focus (v1.3) | Camera framings closer to the Kilter board's proportions (smaller fit, less yaw, centred nearer the route); bigger, paler route holds with smaller, fewer decoys; rock and ice around the route in two close tones; ring colour per wall chosen against the rock (cyan on sandstone and sea cliff, amber on ice) with a solid band and a thin dark inner rim; tape in the ring colour; Skills climber in teal against the orange rock | The climbing was not the focus of the outdoor sections |
 | Hold tags (v1.3) | On the natural walls the tag sits level with its hold, on the side away from the climbing line, and slides in rather than run off the screen; the board keeps its tags below the holds | Tags below the holds covered the climber's head |
+| Real content (v1.4) | `src/content/portfolio.ts` now holds the Oct 7 2026 resume instead of placeholders: Projects (Robot Tour, CompanyBrain, on-device VLM benchmarks, PhoneBench), Experience (CAMP, Purdue, Purdue VIP), four skill groups without proficiency levels, About (Who I am, Awards & honors) and Contact. The "Off the keyboard" hold was dropped for now | Real portfolio content was the first item in `docs/REVIEW.md` |
+| Wall size (v1.4) | Walls hold 2–8 items (`MIN_ITEMS` in `src/content/validate.ts`), down from 3–8; two holds were checked on the glacier wall | Dropping CAMP leaves Experience with two holds, and that should not fail the build |
+| CAMP switch (v1.4) | `SHOW_CAMP` in `portfolio.ts` controls the CAMP hold and which resume PDF the Resume button serves (`public/resume-with-camp.pdf` or `resume-no-camp.pdf`) | The two resumes differ only by the CAMP Leadership section, and it should be easy to drop |
+| Profile phone (v1.4) | Optional `profile.phone`, shown as a `tel:` button on the Contact card and as a line in the text version | A Google Voice number goes on the site; deleting one line removes it |
+| Dates (v1.4) | `DateRange` accepts a bare year ("2022") and an optional `label` that replaces the range ("Summer 2025") | The resume gives Robot Tour as years only and CAMP as a season |

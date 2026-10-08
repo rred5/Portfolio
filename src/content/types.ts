@@ -7,10 +7,12 @@ export interface Link {
 }
 
 export interface DateRange {
-  /** "YYYY-MM" */
+  /** "YYYY-MM", or just "YYYY" when the month isn't known. */
   start: string;
-  /** "YYYY-MM"; missing means "Present". */
+  /** Same format; missing means "Present". */
   end?: string;
+  /** Shown instead of the formatted range, e.g. "Summer 2025". */
+  label?: string;
 }
 
 export interface Profile {
@@ -20,6 +22,8 @@ export interface Profile {
   summary: string;
   location?: string;
   email: string;
+  /** Shown on the Contact card and in the text version when set. */
+  phone?: string;
   links: Link[];
   /** PDF under /public, e.g. "/resume.pdf". */
   resumeUrl?: string;

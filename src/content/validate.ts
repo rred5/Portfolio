@@ -3,7 +3,7 @@
 
 import type { Portfolio, SectionId } from './types';
 
-export const MIN_ITEMS = 3;
+export const MIN_ITEMS = 2;
 export const MAX_ITEMS = 8;
 export const MAX_TAG_LENGTH = 18;
 

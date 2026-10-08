@@ -16,9 +16,14 @@ npm run build      # static site in dist/ (works on any static host)
 
 ## Editing content
 
-Everything shown on the site lives in **`src/content/portfolio.ts`**. Placeholder text starts with
-`[Placeholder]`. Each section needs 3–8 items; `order` runs bottom → top on the wall (oldest first).
+Everything shown on the site lives in **`src/content/portfolio.ts`**, currently filled in from the
+Oct 7 2026 resume. Each section holds 2–8 items; `order` runs bottom → top on the wall (oldest first).
 The build fails with a readable message if the content is invalid.
+
+- **CAMP:** one switch, `SHOW_CAMP` at the top of `portfolio.ts`. Set it to `false` to drop the CAMP
+  hold and serve `public/resume-no-camp.pdf` instead of `public/resume-with-camp.pdf`.
+- **Phone number:** `profile.phone`. Delete the line to take it off the Contact card and text version.
+- **Resume PDFs:** replace the two files in `public/` when the resume changes.
 
 Set `SITE_URL` (env var, used by `astro.config.mjs`) once hosting is decided so `/llms.txt` has
 absolute links.

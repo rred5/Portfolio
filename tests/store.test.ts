@@ -38,8 +38,8 @@ describe('navigation', () => {
   it('section to section is a switch and closes the pinned card', () => {
     s().navigate('projects', { history: 'none' });
     finish();
-    s().pin('project-a', 'pointer');
-    expect(s().pinnedItem).toBe('project-a');
+    s().pin('robot-tour', 'pointer');
+    expect(s().pinnedItem).toBe('robot-tour');
     s().navigate('experience', { history: 'none' });
     expect(s().transition?.kind).toBe('switch');
     expect(s().pinnedItem).toBeNull();
@@ -66,19 +66,19 @@ describe('holds and cards', () => {
   });
 
   it('hover moves the climber and the climber stays after hover ends', () => {
-    s().setHoverItem('project-b');
-    expect(s().climberItem.projects).toBe('project-b');
+    s().setHoverItem('companybrain');
+    expect(s().climberItem.projects).toBe('companybrain');
     s().setHoverItem(null);
-    expect(s().climberItem.projects).toBe('project-b');
+    expect(s().climberItem.projects).toBe('companybrain');
   });
 
   it('pinned card stays while hovering another hold; clicking another hold replaces it', () => {
-    s().pin('project-a', 'pointer');
-    s().setHoverItem('project-c');
-    expect(s().pinnedItem).toBe('project-a');
-    expect(s().climberItem.projects).toBe('project-c');
-    s().pin('project-d', 'pointer');
-    expect(s().pinnedItem).toBe('project-d');
+    s().pin('robot-tour', 'pointer');
+    s().setHoverItem('vlm-benchmarks');
+    expect(s().pinnedItem).toBe('robot-tour');
+    expect(s().climberItem.projects).toBe('vlm-benchmarks');
+    s().pin('phonebench', 'pointer');
+    expect(s().pinnedItem).toBe('phonebench');
   });
 
   it('ignores items from other sections', () => {
@@ -87,7 +87,7 @@ describe('holds and cards', () => {
   });
 
   it('close clears the pinned card', () => {
-    s().pin('project-a', 'keyboard');
+    s().pin('robot-tour', 'keyboard');
     s().closeCard();
     expect(s().pinnedItem).toBeNull();
   });

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { profile } from '../content/query';
 import type { Item, SkillLevel } from '../content/types';
 import { formatRange } from '../lib/dates';
-import { CodeIcon, CopyIcon, DownloadIcon, LinkIcon, MailIcon } from './icons';
+import { CodeIcon, CopyIcon, DownloadIcon, LinkIcon, MailIcon, PhoneIcon } from './icons';
 
 export function cardHeader(item: Item): { title: string; subtitle?: string; meta?: string } {
   switch (item.kind) {
@@ -193,6 +193,12 @@ export function CardBody({ item }: { item: Item }) {
         <>
           <CopyEmail />
           <div className="card__links">
+            {profile.phone && (
+              <LinkButton href={`tel:+1${profile.phone.replace(/\D/g, '')}`}>
+                <PhoneIcon />
+                <span>{profile.phone}</span>
+              </LinkButton>
+            )}
             {profile.links.map((l) => (
               <LinkButton key={l.url} href={l.url}>
                 <LinkIcon />
