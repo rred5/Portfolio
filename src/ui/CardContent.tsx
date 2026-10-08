@@ -34,9 +34,9 @@ function Paragraphs({ text }: { text: string }) {
   );
 }
 
-function Chips({ list }: { list: string[] }) {
+function Chips({ list, label = 'Technologies' }: { list: string[]; label?: string }) {
   return (
-    <ul className="chips" aria-label="Technologies">
+    <ul className="chips" aria-label={label}>
       {list.map((t) => (
         <li key={t} className="chip">
           {t}
@@ -93,7 +93,8 @@ function CopyEmail() {
   );
 }
 
-export function CardBody({ item }: { item: Item }) {
+/** `preview`: the hover card is view-only (D22), so link buttons that cannot be clicked are left out. */
+export function CardBody({ item, preview = false }: { item: Item; preview?: boolean }) {
   switch (item.kind) {
     case 'project':
       return (
@@ -116,7 +117,7 @@ export function CardBody({ item }: { item: Item }) {
               <Chips list={item.tech} />
             </>
           )}
-          {(item.links?.github || item.links?.demo || item.links?.other?.length) && (
+          {!preview && (item.links?.github || item.links?.demo || item.links?.other?.length) && (
             <div className="card__links">
               {item.links?.github && (
                 <LinkButton href={item.links.github}>
@@ -157,7 +158,7 @@ export function CardBody({ item }: { item: Item }) {
               <Chips list={item.tech} />
             </>
           ) : null}
-          {item.link && (
+          {!preview && item.link && (
             <div className="card__links">
               <LinkButton href={item.link.url}>
                 <LinkIcon />
@@ -170,14 +171,18 @@ export function CardBody({ item }: { item: Item }) {
     case 'skills':
       return (
         <>
-          <ul className="skills">
-            {item.skills.map((s) => (
-              <li key={s.name} className="skill">
-                <span>{s.name}</span>
-                {s.level && <Level level={s.level} />}
-              </li>
-            ))}
-          </ul>
+          {item.skills.some((s) => s.level) ? (
+            <ul className="skills">
+              {item.skills.map((s) => (
+                <li key={s.name} className="skill">
+                  <span>{s.name}</span>
+                  {s.level && <Level level={s.level} />}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Chips list={item.skills.map((s) => s.name)} label="Skills" />
+          )}
           {item.note && <p className="card__note">{item.note}</p>}
         </>
       );
@@ -186,6 +191,13 @@ export function CardBody({ item }: { item: Item }) {
         <>
           {item.image && <img className="card__image" src={item.image.src} alt={item.image.alt} loading="lazy" />}
           <Paragraphs text={item.body} />
+          {item.bullets?.length ? (
+            <ul className="card__list">
+              {item.bullets.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          ) : null}
         </>
       );
     case 'contact':

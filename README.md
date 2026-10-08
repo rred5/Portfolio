@@ -24,6 +24,10 @@ The build fails with a readable message if the content is invalid.
   hold and serve `public/resume-no-camp.pdf` instead of `public/resume-with-camp.pdf`.
 - **Phone number:** `profile.phone`. Delete the line to take it off the Contact card and text version.
 - **Resume PDFs:** replace the two files in `public/` when the resume changes.
+- **Keep cards short:** a hover preview can't scroll, so a project gets a one-line `summary`, one short
+  paragraph that doesn't repeat it, and about three one-line highlights. `npm test` checks the length
+  limits (`tests/content.test.ts`), and the build rejects empty text, bad dates, bad links and repeated
+  entries. Tags stay short too: a pinned tag is wider, and the longest ones crowd a phone screen.
 
 Set `SITE_URL` (env var, used by `astro.config.mjs`) once hosting is decided so `/llms.txt` has
 absolute links.

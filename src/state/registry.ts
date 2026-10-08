@@ -27,6 +27,8 @@ export interface Anchor {
   pos: Vector3;
   /** Measured width of the element's content (tags beside their hold), cached once laid out. */
   width?: number;
+  /** The tag's pinned state when `width` was measured; a pinned tag is wider (pin icon). */
+  widthKey?: string;
 }
 
 /** DOM elements pinned to 3D points (region labels, hold tags). */

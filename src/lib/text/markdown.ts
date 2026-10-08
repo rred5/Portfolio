@@ -58,6 +58,7 @@ function itemMarkdown(item: Item, profile: Profile): string {
     case 'about': {
       out.push(`### ${item.heading}`);
       out.push(item.body);
+      if (item.bullets?.length) out.push(item.bullets.map((b) => `- ${b}`).join('\n'));
       break;
     }
     case 'contact': {

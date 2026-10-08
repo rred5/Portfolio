@@ -1,5 +1,9 @@
 // ALL portfolio content lives here (spec §4), taken from the Oct 7 2026 resume. Item `order` runs
 // bottom → top on each wall (oldest first for dated items). Each section holds 2–8 items.
+//
+// Card text is meant to be skimmed: a one-line `summary`, one short paragraph that does not repeat it,
+// and about three one-line highlights. A hover preview cannot scroll, so keep each card short enough
+// to show in full (the long version lives on the resume).
 
 import type { Item, Portfolio, Profile, Section } from './types';
 
@@ -77,17 +81,16 @@ export const items: Item[] = [
     order: 0,
     tag: 'Robot Tour',
     kind: 'project',
-    name: 'Robot Tour Autonomous Robotics System',
+    name: 'Robot Tour Autonomous Robot',
     dates: { start: '2022', end: '2024' },
-    summary:
-      'A competition robot that won 1st place at the Texas State Tournament. I was lead architect; my partner led the code development.',
+    summary: '1st place at the Texas State Tournament.',
     description:
-      'Robot Tour rewards repeatability: the robot has to drive a fixed course accurately, run after run. I architected a command-based C++/Arduino motion-control stack for a Pololu robot, with encoder distance tracking, IMU/gyro yaw estimation, and waypoint and state tracking.\n\nOn top of that I designed the precision-control logic and a custom PCB that brings gyroscope and Hall effect encoder feedback into the robot, so autonomous runs repeat reliably.',
-    tech: ['C++', 'Arduino', 'PID control', 'IMU / gyro', 'Hall effect encoders', 'PCB design'],
+      'A Science Olympiad robot that has to drive a fixed course the same way every run. I was lead architect; my partner led the code development.',
+    tech: ['C++', 'Arduino', 'PID control', 'IMU / gyro', 'PCB design'],
     highlights: [
-      '1st place, Texas State Tournament (Science Olympiad Robot Tour, 2024)',
-      'PID-style correction, S-curve acceleration, drift correction, turn calibration and motor balancing',
-      'Custom PCB integrating a gyroscope and Hall effect encoder feedback',
+      'C++/Arduino motion control with encoder distance tracking and IMU/gyro yaw estimation',
+      'PID-style correction, S-curve acceleration, drift correction, turn calibration',
+      'Custom PCB with gyroscope and Hall effect encoder feedback',
     ],
   },
   {
@@ -98,15 +101,14 @@ export const items: Item[] = [
     kind: 'project',
     name: 'CompanyBrain',
     dates: { start: '2026-07' },
-    summary: 'A solo-built AI knowledge-graph platform that turns internal company documents into source-linked facts.',
+    summary: 'A solo-built knowledge graph for company documents.',
     description:
-      'I designed and built, solo, a full-stack platform that turns company documents into a source-linked knowledge graph for AI agents that act on company processes.\n\nAn LLM extraction pipeline (Claude forced tool use) pulls entities and relationships against a fixed ontology and tags each fact with its source document and its authority: official policy or tribal knowledge.',
-    tech: ['Next.js', 'TypeScript', 'Prisma', 'PostgreSQL / pgvector', 'Neon', 'Vercel', 'Anthropic API', 'Voyage AI'],
+      'Turns company documents into a source-linked knowledge graph for AI agents. Claude extracts each fact with its source and authority (policy or tribal knowledge).',
+    tech: ['Next.js', 'TypeScript', 'Prisma', 'PostgreSQL', 'pgvector', 'Anthropic API', 'Voyage AI'],
     highlights: [
-      'Two-stage entity resolution (exact match, then Voyage embeddings with pgvector similarity); replaced a guessed 0.85 merge threshold that missed a real duplicate with 0.75, set from measured duplicate vs. non-duplicate scores',
-      'Semantic search that ranks graph entities by pgvector similarity to a free-text query, verified on live data',
-      'LLM spend capped by an in-database ledger and a fail-closed pre-call budget gate',
-      'Fixed a rate-limit failure found in live testing (batched embedding calls) and three bugs from a code review (27 unit tests); development isolated from production data with a Neon database branch',
+      'A measured 0.75 merge threshold replaced a guessed 0.85 that missed a duplicate',
+      'Semantic search ranks entities by pgvector similarity, verified on live data',
+      'LLM spend capped by a ledger and a fail-closed budget gate',
     ],
     links: { demo: 'https://company-brain-nu-puce.vercel.app' },
   },
@@ -118,13 +120,13 @@ export const items: Item[] = [
     kind: 'project',
     name: 'On-device VLM Benchmarks',
     dates: { start: '2026-08' },
-    summary: "A benchmark harness that measures a vision-language model's speed on a Snapdragon phone's CPU, GPU and NPU.",
+    summary: "Qwen3-VL-2B speed on a phone's CPU, GPU and NPU.",
     description:
-      "For the Purdue LPCVC team I built a benchmark harness on Qualcomm's GenieX Android sample. It runs Qwen3-VL-2B on the phone's CPU, GPU and NPU and records time-to-first-token, prefill speed and decode speed.",
+      "For the Purdue LPCVC team: a benchmark harness on Qualcomm's GenieX Android sample that records time-to-first-token, prefill speed and decode speed on each processor.",
     tech: ['Qwen3-VL-2B', 'Qualcomm GenieX', 'Android / adb'],
     highlights: [
-      'Over 10 runs per configuration, the GPU and NPU cut time-to-first-token 2–3× versus the CPU (cold start: 30.1 s to 9.6 s)',
-      'Accuracy pilot that scores real-vs.-tampered image verdicts against a labeled dataset',
+      'GPU and NPU cut time-to-first-token 2–3× versus the CPU over 10 runs per configuration (cold start: 30.1 s to 9.6 s)',
+      'Accuracy pilot scoring real-vs.-tampered image verdicts against a labeled dataset',
     ],
   },
   {
@@ -135,14 +137,14 @@ export const items: Item[] = [
     kind: 'project',
     name: 'PhoneBench',
     dates: { start: '2026-08' },
-    summary: 'A website for queueing benchmark jobs on a shared Snapdragon phone, built for the Purdue LPCVC team.',
+    summary: 'A website for queueing benchmark jobs on a shared phone.',
     description:
-      'Running a benchmark on the team\'s shared phone used to mean USB and adb. I built PhoneBench so teammates can queue jobs from a website instead.\n\nIt has been live since October 2026. Sign-in is limited to team members for now.',
-    tech: ['Kotlin', 'FastAPI', 'Supabase', 'React', 'Vercel', 'Qualcomm GenieX'],
+      "Teammates queue jobs on the team's Snapdragon phone from a website instead of using USB and adb. Live since October 2026, with sign-in limited to team members.",
+    tech: ['Kotlin', 'FastAPI', 'Supabase', 'React', 'Vercel'],
     highlights: [
-      'A Kotlin worker app on the phone takes jobs from the cloud queue and runs them on the CPU, GPU or NPU',
-      'FastAPI and Supabase job queue with Google sign-in; React site on Vercel',
-      'The first cloud job (10 images × 10 repetitions, Qwen3-VL-2B) completed all 100 runs',
+      'Kotlin worker app runs each job on the phone\'s CPU, GPU or NPU',
+      'FastAPI and Supabase queue with Google sign-in; React site on Vercel',
+      'First cloud job completed all 100 runs (10 images × 10 repetitions)',
     ],
     links: { other: [{ label: 'Live site (team only)', url: 'https://lpcvc-phone-bench-app-server.vercel.app' }] },
   },
@@ -167,14 +169,11 @@ export const items: Item[] = [
     order: 2,
     tag: 'Purdue VIP',
     kind: 'experience',
-    company: 'Purdue VIP: Low-Power Computer Vision Challenge (LPCVC) Team',
-    role: 'Team member',
+    company: 'Low-Power Computer Vision Challenge',
+    role: 'Purdue VIP LPCVC Team',
     dates: { start: '2026-08' },
     summary: 'On-device vision-language model benchmarking and remote-access infrastructure.',
-    bullets: [
-      'Built PhoneBench, the site where teammates queue benchmark jobs on a shared Snapdragon phone',
-      'Built the CPU/GPU/NPU benchmark harness and the accuracy pilot for Qwen3-VL-2B',
-    ],
+    bullets: ['Built PhoneBench and the Qwen3-VL-2B benchmark harness (see Projects)'],
   },
 
   // Skills (one hold per group)
@@ -273,7 +272,15 @@ export const items: Item[] = [
     tag: 'Awards',
     kind: 'about',
     heading: 'Awards & honors',
-    body: 'Top 30 USA, PicoCTF 2024; AIME Qualifier 2024; CyberPatriot Nationals Semifinalist 2024.\n\n1st, Texas State Tournament, Science Olympiad Robot Tour 2024; 2nd, Texas State Tournament, Science Olympiad Solar Power 2024; FBLA Nationals Qualifier 2024.',
+    body: 'Competition results, all from 2024.',
+    bullets: [
+      'Top 30 USA, PicoCTF',
+      'AIME Qualifier',
+      'CyberPatriot Nationals Semifinalist',
+      '1st, Texas State Tournament: Science Olympiad Robot Tour',
+      '2nd, Texas State Tournament: Science Olympiad Solar Power',
+      'FBLA Nationals Qualifier',
+    ],
   },
   {
     id: 'get-in-touch',

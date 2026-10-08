@@ -502,8 +502,8 @@ place. **[P8]** No reassembly animation. Pinned card closes at the start.
 | Project | Name · dates · summary · image (if any) · description · highlights bullets · tech chips · GitHub / Demo buttons |
 | Experience | Role · company · dates · location · summary · bullets · tech chips · link |
 | Skill group | Group name · skills as chips (level shown as 1–3 filled dots) · note |
-| About | Heading · image (if any) · body |
-| Contact | Heading · email (copy button) · profile link buttons · resume download button |
+| About | Heading · image (if any) · body · bullets (if any) |
+| Contact | Heading · email (copy button) · phone (if set) · profile link buttons · resume download button |
 
 One image per card max; no lightbox in v1.
 
@@ -817,3 +817,8 @@ Small calls made while building, for review:
 | CAMP switch (v1.4) | `SHOW_CAMP` in `portfolio.ts` controls the CAMP hold and which resume PDF the Resume button serves (`public/resume-with-camp.pdf` or `resume-no-camp.pdf`) | The two resumes differ only by the CAMP Leadership section, and it should be easy to drop |
 | Profile phone (v1.4) | Optional `profile.phone`, shown as a `tel:` button on the Contact card and as a line in the text version | A Google Voice number goes on the site; deleting one line removes it |
 | Dates (v1.4) | `DateRange` accepts a bare year ("2022") and an optional `label` that replaces the range ("Summer 2025") | The resume gives Robot Tour as years only and CAMP as a season |
+| Card text (v1.4) | Project cards carry a one-line summary, one short paragraph that does not repeat it, and about three one-line highlights; `tests/content.test.ts` holds the length limits. Skills without levels render as chips (rows with dots only when a level is set); an About item can have `bullets` (Awards uses them) | Cards read like pasted resume bullets, the hover preview cut off mid-sentence, and the skills rows looked sparse |
+| Hover preview (v1.4) | A preview omits link buttons (Demo, Live site, experience link) | Previews are view-only (D22), so the buttons could not be clicked and cost about 56 px |
+| Phone sheet (v1.4) | The sheet header is compact (no eyebrow, 24 px title, tighter padding) and the top bar shows the short nav label ("About") on phones, with smaller type under 380 px wide. The sheet stays at 45% | With real text the header took half the sheet and the section title truncated to "Proje…" or "About & …" on 360 px phones |
+| Tag clamp (v1.4) | `AnchorSync` measures a tag again when it is pinned (the pin icon makes it wider) and also slides board tags (below their hold) in from either screen edge | A pinned tag lost its left end on phones, and "VLM Benchmarks" ran off a 360 px screen |
+| Content checks (v1.4) | `validateContent` also rejects empty or padded text, bad dates (`YYYY` / `YYYY-MM`, end before start), non-http(s) links, a phone that is not 10 digits, a `resumeUrl` that is not a PDF path, and repeated chips or bullets | Content edits fail the build with a readable message instead of shipping a broken card |

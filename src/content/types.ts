@@ -95,6 +95,8 @@ export interface AboutItem extends BaseItem {
   kind: 'about';
   heading: string;
   body: string;
+  /** Shown as a list under the body. */
+  bullets?: string[];
   image?: Image;
 }
 
