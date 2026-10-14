@@ -18,6 +18,7 @@ export function IslandTitle() {
 export function TopBar() {
   const shown = useStore((s) => s.shown);
   const navigate = useStore((s) => s.navigate);
+  const phone = useStore((s) => s.env.sheet);
   const inSection = shown !== 'island';
   return (
     <div className="topbar">
@@ -34,7 +35,8 @@ export function TopBar() {
           >
             {profile.name}
           </a>
-          <h1 className="topbar__title">{sectionById(shown).label}</h1>
+          {/* The phone top bar is too narrow for "About & Contact", so it uses the short nav label. */}
+          <h1 className="topbar__title">{phone ? sectionById(shown).navLabel : sectionById(shown).label}</h1>
         </>
       )}
       <a className="text-btn" href="/text">

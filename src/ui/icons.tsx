@@ -115,6 +115,14 @@ export function MailIcon() {
   );
 }
 
+export function PhoneIcon() {
+  return (
+    <svg {...common} width={18} height={18}>
+      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a1 1 0 01-1 1A15 15 0 014 5a1 1 0 011-1z" />
+    </svg>
+  );
+}
+
 export function CopyIcon() {
   return (
     <svg {...common} width={16} height={16}>

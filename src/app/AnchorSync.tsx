@@ -24,11 +24,21 @@ export function AnchorSync() {
           let x = (v.x * 0.5 + 0.5) * W;
           const y = (-v.y * 0.5 + 0.5) * H;
           // A tag beside its hold slides in rather than run off the screen (over its own hold's
-          // ring, never across to the climber's side).
+          // ring, never across to the climber's side). One hanging below its hold (the board) is
+          // centred on it, so it slides in from either edge.
           const left = a.el.classList.contains('anchor--tag-left');
-          if (left || a.el.classList.contains('anchor--tag-right')) {
-            if (!a.width) a.width = (a.el.firstElementChild as HTMLElement | null)?.offsetWidth || 0;
-            x = left ? Math.max(x, a.width + EDGE) : Math.min(x, W - a.width - EDGE);
+          const right = a.el.classList.contains('anchor--tag-right');
+          if (left || right || a.el.classList.contains('anchor--tag-below')) {
+            // A pinned tag is wider (pin icon), so it is measured again when its pinned state changes.
+            const tag = a.el.firstElementChild as HTMLElement | null;
+            const key = tag?.dataset.pinned ?? '';
+            if (!a.width || a.widthKey !== key) {
+              a.width = tag?.offsetWidth || 0;
+              a.widthKey = key;
+            }
+            if (left) x = Math.max(x, a.width + EDGE);
+            else if (right) x = Math.min(x, W - a.width - EDGE);
+            else x = Math.min(Math.max(x, a.width / 2 + EDGE), W - a.width / 2 - EDGE);
           }
           a.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
         }

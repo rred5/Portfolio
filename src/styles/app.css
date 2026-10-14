@@ -655,12 +655,27 @@
   opacity: 0.7;
 }
 
+/* The sheet is only ~45% of the screen, so the header stays compact to leave room for the text. The
+   section name is already in the top bar, so the eyebrow is dropped here. */
 .sheet .card__head {
-  padding-top: 22px;
+  padding: 22px 52px 10px 20px;
+}
+
+.sheet .card__eyebrow {
+  display: none;
 }
 
 .sheet .card__title {
-  font-size: 26px;
+  font-size: 24px;
+}
+
+.sheet .card__subtitle {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.sheet .card__meta {
+  margin-top: 6px;
 }
 
 /* ---------------------------------------------------------------- Navigation (spec §12) */
@@ -945,6 +960,30 @@
 .overlay[data-layout='sheet'] .hold-tag {
   font-size: 12px;
   padding: 2px 7px 3px;
+}
+
+/* Narrow phones (360 to 375 px wide): a longer name would squeeze the section title down to "Proje…",
+   so the top bar uses slightly smaller type and padding. */
+@media (max-width: 380px) {
+  .overlay[data-layout='sheet'] .topbar {
+    gap: 6px;
+  }
+
+  .overlay[data-layout='sheet'] .topbar__name {
+    font-size: 15px;
+    padding: 0 8px;
+  }
+
+  .overlay[data-layout='sheet'] .text-btn {
+    font-size: 12px;
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .overlay[data-layout='sheet'] .topbar__title {
+    font-size: 17px;
+    padding: 0 3px;
+  }
 }
 
 

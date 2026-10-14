@@ -27,7 +27,8 @@ plus screenshot checks of every view on desktop and phone. v1 is tagged `v1-save
 ## Recommended next, in priority order
 
 ### 1. Content and launch (biggest impact)
-- **Real content** in `src/content/portfolio.ts` (everything is `[Placeholder]`).
+- ~~Real content in `src/content/portfolio.ts`~~: filled in from the Oct 7 2026 resume. Still to add:
+  Robot Tour and PhoneBench GitHub links, an updated CompanyBrain demo link, project images.
 - **Pick the nav variant** (`?nav=rail` vs `?nav=dock`) and delete the other.
 - **Transition timings**: say what feels off; all in `src/config/motion.ts`.
 - **Hosting**: set `SITE_URL`, add a 1200×630 `og:image` (a screenshot of the island). Canonical
