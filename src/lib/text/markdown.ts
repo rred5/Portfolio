@@ -20,7 +20,7 @@ function contactLines(profile: Profile): string[] {
   const lines = [`- Email: [${profile.email}](mailto:${profile.email})`];
   if (profile.phone) lines.push(`- Phone: ${profile.phone}`);
   for (const l of profile.links) lines.push(`- ${l.label}: <${l.url}>`);
-  if (profile.resumeUrl) lines.push(`- Resume: <${profile.resumeUrl}>`);
+  if (profile.resumeUrl) lines.push(`- Resume: [PDF](${profile.resumeUrl})`);
   return lines;
 }
 

@@ -144,6 +144,14 @@ describe('text version', () => {
     for (const i of ofKind('skills')) for (const s of i.skills) expect(md).toContain(`- ${s.name}`);
   });
 
+  it('links the resume as a Markdown link, which also renders as a real link on /text', () => {
+    // A bare <...> autolink needs a scheme, so a root-relative resume path showed up as literal text.
+    const { resumeUrl } = portfolio.profile;
+    expect(resumeUrl).toBeDefined();
+    expect(md).toContain(`- Resume: [PDF](${resumeUrl})`);
+    expect(md).not.toContain(`<${resumeUrl}>`);
+  });
+
   it('lists dated sections newest first', () => {
     for (const section of ['projects', 'experience']) {
       const positions = inSection(section).reverse().map((i) => md.indexOf(heading(i)));
