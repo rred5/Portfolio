@@ -6,7 +6,8 @@ import react from '@astrojs/react';
 export default defineConfig({
   site: process.env.SITE_URL ?? 'https://your-domain.example',
   integrations: [react()],
-  // `/projects` → projects.html, so section URLs work on any static host without rewrites.
+  // `/projects` → projects.html. The host must map clean URLs to those files: Vercel needs
+  // `cleanUrls: true` (vercel.json; without it /text and every section URL 404). Netlify and GitHub Pages do it by default.
   build: { format: 'file' },
   trailingSlash: 'never',
   devToolbar: { enabled: false },

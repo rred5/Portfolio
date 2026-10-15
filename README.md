@@ -11,8 +11,13 @@ npm install
 npm run dev        # http://localhost:4321
 npm test           # unit tests (content, text version, state rules, routes)
 npm run check      # type check (.ts, .tsx, .astro)
-npm run build      # static site in dist/ (works on any static host)
+npm run build      # static site in dist/ (one .html file per page)
 ```
+
+**Hosting:** the build writes `projects.html`, `text.html`, and so on, so the host has to serve `/projects`
+and `/text` from those files. `vercel.json` turns on `cleanUrls` for Vercel; without it `/text` and every
+section URL typed into the address bar return 404 (clicking around in the app still works, because that
+navigation happens client-side). Netlify and GitHub Pages do this by default.
 
 ## Editing content
 
