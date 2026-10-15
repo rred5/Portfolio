@@ -74,7 +74,8 @@ the same content data.
 | `/llms-full.txt` | Full portfolio content as Markdown |
 
 - Each 3D route is a static HTML page that mounts the same app with a different starting state, so deep
-  links work on any static host.
+  links work on a static host that serves `/projects` from `projects.html`. Vercel needs `cleanUrls: true`
+  (set in `vercel.json`); Netlify and GitHub Pages do this by default.
 - Moving between 3D routes happens client-side (History API), so there are no page reloads. Browser
   back/forward moves between island and sections and runs the normal transitions.
 - Pinning a card replaces the hash (`history.replaceState`, so pinning doesn't add history entries).
